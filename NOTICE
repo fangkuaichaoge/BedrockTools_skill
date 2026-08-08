@@ -1,0 +1,18 @@
+bedrock-pe-modding
+
+This project distills methodology, code patterns, and signatures from:
+
+1. BedrockTools
+   - Author: RadiantByte (and contributors)
+   - Source: https://github.com/RadiantByte/BedrockTools
+   - License: GNU General Public License v3.0
+
+2. preloader-android (the LeviLauncher mod SDK)
+   - Organization: LiteLDev
+   - Source: https://github.com/LiteLDev/preloader-android
+
+3. LeviLaunchroid (LeviLauncher)
+   - Source: https://github.com/LiteLDev/LeviLaunchroid
+
+This project's own text, documentation, and scripts are original work written
+for this repository, licensed under GPL-3.0 as a derivative educational work.
