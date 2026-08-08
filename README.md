@@ -13,6 +13,19 @@ paths, game versions, or file sizes. Every path in the docs is a placeholder
 (`<libminecraftpe.so>`, `<NDK>`, `<mod-dir>`). A disassembler (IDA/Ghidra) is
 optional; the core workflow runs on the binary itself.
 
+## Agent compatibility
+
+- **Codex / Cursor / other AGENTS.md readers**: start with `AGENTS.md`.
+- **Claude Code / other CLAUDE.md readers**: start with `CLAUDE.md`
+  (identical guidance).
+- The skill itself (`skills/bedrock-pe-modding/SKILL.md`) uses the shared
+  `SKILL.md` frontmatter convention (`name` + `description`), so it is
+  discoverable by Codex, Claude Code, and other agents that support agent
+  skills.
+- Install paths: copy `skills/bedrock-pe-modding` to `~/.codex/skills/`
+  (Codex), `~/.claude/skills/` (Claude Code), or the equivalent skills
+  directory of your agent.
+
 ## What's inside
 
 ```

@@ -1,4 +1,8 @@
-# AGENTS.md — AI working guide for this workspace
+# CLAUDE.md — AI working guide (Claude Code and other agents)
+
+This file is the Claude Code / generic-agent companion to `AGENTS.md` (the
+Codex convention). The instructions are identical; read `AGENTS.md` as the
+canonical copy when the two ever diverge.
 
 This workspace is a Minecraft Bedrock (PE) Android native-mod / hook research
 environment. The methodology comes from the open-source **BedrockTools**
@@ -14,16 +18,15 @@ or patches, compile an arm64 `.so`, and verify it.
   never as the methodology source for deliverables.
 - For any hooking/modding/IDA/signature/build task, **read the skill first**:
   `skills/bedrock-pe-modding/SKILL.md` plus its `references/` and `scripts/`.
+  The skill uses the shared `SKILL.md` frontmatter convention
+  (`name` + `description`), which Codex, Claude Code, Cursor, and other
+  agents can all discover.
 - Everything you produce must be **machine-agnostic and English-readable**:
   use placeholders like `<libminecraftpe.so>`, `<NDK>`, `<mod-dir>` instead of
   local absolute paths; do not bake in game-version numbers, file sizes, or
   build-specific addresses (they confuse readers on other machines).
 - The target binary is usually `libminecraftpe.so` in the workspace root.
   Confirm its path with `rg --files` / `Get-ChildItem` rather than assuming.
-- Cross-agent compatibility: `CLAUDE.md` mirrors this file so Claude Code and
-  other agents that look for `CLAUDE.md` find the same guidance. The skill
-  itself uses the shared `SKILL.md` frontmatter convention
-  (`name` + `description`) understood by Codex, Claude Code, Cursor, etc.
 
 ## 1. Standard workflow (for every mod/hook task)
 
@@ -71,8 +74,8 @@ or patches, compile an arm64 `.so`, and verify it.
 | `skills/bedrock-pe-modding/references/ida-workflow.md` | optional IDA / IDA Pro MCP guide |
 | `skills/bedrock-pe-modding/references/version-porting.md` | porting checklist |
 | `skills/bedrock-pe-modding/scripts/` | verify_signatures, elf_facts, aarch64_enc, ida_mcp_client, package_levipack, ida_decompile_targets |
-| `CLAUDE.md` | Claude Code / other-agent companion to this file |
 | `HOOK_TUTORIAL.md` | user-facing full tutorial |
+| `AGENTS.md` / `CLAUDE.md` | per-agent entry guides (Codex / Claude Code & others) |
 | `github-upload/bedrock-pe-modding/` | clean GitHub-ready copy of this repo package |
 
 ## 4. Ethics and safety

@@ -224,6 +224,10 @@ subscribe through the runtime ABI with `RuntimeListener<Event>`.
 
 ## Notes
 
+- Compatibility: this skill uses the shared `SKILL.md` frontmatter convention
+  (`name` + `description`) and is usable by Codex, Claude Code, Cursor, and
+  other agents that support agent skills. Repo-level entry guides:
+  `AGENTS.md` (Codex convention) and `CLAUDE.md` (Claude Code convention).
 - Hook/patch only what the user explicitly authorized; keep to learning and
   personal use and respect the game's terms of service.
 - Always keep a backup of the original `.so`; fail safely on version mismatch.
