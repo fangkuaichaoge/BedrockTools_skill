@@ -145,6 +145,22 @@ but the binary (plus an optional disassembler).
 6. Verify: the parser is confirmed by its own string xrefs; every patch point
    is validated by reading original bytes before writing (version-safe).
 
+### Lesson learned (distilled technique)
+
+When a behavior is dropped somewhere in a game pipeline, fix it at the
+decision site where it is dropped, not by forcing an upstream gate:
+
+- Locate the exact branch or condition that drops the behavior (decompile it,
+  or reverse a known-working reference), then patch that branch directly with
+  the smallest change: an unconditional branch, a NOP, or a corrected flag.
+- Do not force an upstream "type / feature check" to always succeed. Such a
+  flag usually gates several downstream paths; enabling it can run validation
+  paths that reject the object (for example, a "feature present" flag that
+  also forces reading optional fields the object does not have, causing the
+  object to be rejected later).
+- When a working reference mod exists, reverse it to learn the exact decision
+  points, then apply the same minimal patches with original-byte verification.
+
 ## Decision shortcuts
 
 - Function returns a value you want to change -> inline hook, call orig first,
@@ -174,3 +190,6 @@ but the binary (plus an optional disassembler).
 - Error/log strings are excellent anchors for finding undocumented parsers:
   search the message text, follow its xref, and decompile the referencing
   function.
+- Forcing an upstream gate (e.g. a type check) to "always true" can enable
+  validation paths that reject the object; prefer patching the specific
+  decision branch at the site where the behavior is dropped.

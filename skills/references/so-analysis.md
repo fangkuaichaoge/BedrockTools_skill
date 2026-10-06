@@ -127,3 +127,31 @@ scan already proves uniqueness.
 sections, dynamic symbols, strings, version candidates) with the standard
 library and writes `elf_facts.json`. Use it as the first step on any new
 `.so` you receive.
+
+## 8. Renderer / graphics forensics from the binary (and its limits)
+
+Useful things that can be established **statically**, with the dynamic symbol
+table plus the string table:
+
+| Question | How to answer it |
+|---|---|
+| Which graphics API family does the target use? | Enumeration of the imported symbol names, grouped by prefix; a near-empty import list for the *draw* calls is itself a finding |
+| Which calls are resolved by name at runtime? | The symbol names appear as plain strings in `.rodata` even though they are not imported |
+| Is a "missing" import really unused? | Count the name in the string table before concluding it is unused - it may be resolved dynamically |
+| Which entry points must be intercepted to see everything? | Union of (imported symbols) and (API-family names present as strings), including instanced/indirect/multi variants |
+| Are shader texts embedded? | Search for the shader language's own tokens; embedded source is often NUL-delimited printable text, so a scan for an entry-point token followed by a NUL-bounded printable run recovers it |
+| Is a shader binary blob present? | Look for the intermediate representation's magic; an IR blob also carries its symbol names as strings, which is enough to learn attribute/uniform vocabulary even without source |
+
+Limits - stop static work and ask the device when:
+
+* the shader sources are **generated at runtime** (only a small subset of
+  built-in shaders is present verbatim, and the interesting passes are missing);
+* the vocabulary you need is the *generated* one (the target renames everything
+  during translation), so static names do not match what the API receives;
+* a name appears only as a fragment (no surrounding structure to decode).
+
+In those cases the productive move is one instrumentation build that prints the
+vocabulary actually observed at the API boundary, instead of more binary
+archaeology. Static analysis is for *locating* things; the device is for
+*deciding* what they mean.
+

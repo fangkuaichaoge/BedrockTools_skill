@@ -313,3 +313,41 @@ and event stream.
 - `mprotect` must be page-aligned: `pageStart = addr & ~(pagesize-1)`.
 - Multiple mods hooking the same function: use `pl::memory::hook` priorities,
   not raw GlossHook calls that overwrite each other.
+
+## 9. Library-boundary hooks (detouring a platform library)
+
+When the effect you want is expressible in terms of a **platform API** (graphics,
+audio, input, file I/O) rather than game data, detour that library instead of
+resolving game functions. You gain version tolerance (no signatures) and lose
+access to engine-level objects - accept that trade knowingly.
+
+Practical requirements:
+
+1. **Cover every resolution path.** A symbol can arrive via a static import
+   (branch through the loader stub), a lazy `dlsym`-style lookup, or the API's
+   own "get proc address" query, which may hand out a *driver* address different
+   from the exported stub. Detour the exported body **and** wrap the
+   proc-address dispatcher so dynamically fetched pointers also come back as
+   your detour. Then re-scan the libraries the target actually resolved against
+   (the one your own module links is not necessarily the one the target uses).
+2. **Install deferred, idempotently.** The library may not be loaded when your
+   mod enables. Use a short watcher that retries, processes each library once,
+   and never double-patches an address. Track "fully processed" **per library**:
+   a mod that itself links a sibling library will otherwise report success from
+   its own dependency while the target's real library is still unpatched.
+3. **Never drop a call.** If a detour is reached before its original pointer was
+   captured, resolve it lazily and, failing that, execute the resolved export
+   rather than returning early. Interception layers must fail open.
+4. **Prove arrival.** Log the first real call of one entry point that must run
+   constantly (a canary). "Hooks installed" is not evidence; arrival is.
+5. **Beware entry-point families.** The interesting calls may not be the
+   statically imported ones (instanced/indirect variants are often resolved by
+   name at runtime). Enumerate the API family from the binary's imports *and*
+   its string table, and hook the union - see `so-analysis.md` §8.
+6. **Restore state you touch.** If the API has cached state (bindings, masks,
+   modes), save and restore exactly, because the target assumes it is unchanged.
+
+For what to do with those hooks once installed (shader-text injection, extra
+passes, geometry caveats, brightness budgets), see
+`render-pipeline-hooks.md` and `shader-source-injection.md`.
+

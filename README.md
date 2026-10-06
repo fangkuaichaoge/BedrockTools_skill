@@ -30,18 +30,26 @@ optional; the core workflow runs on the binary itself.
 
 ```
 ├── AGENTS.md                      # guide for AI agents working in a mod repo
+├── CLAUDE.md                      # identical guidance for Claude Code & others
 ├── HOOK_TUTORIAL.md               # full user-facing tutorial (feature -> .so)
 └── skills/bedrock-pe-modding/     # installable Codex skill
     ├── SKILL.md                   # entry: architecture, APIs, workflow
     ├── references/
     │   ├── feature-workflow.md    # feature -> function -> feasibility -> hook choice
-    │   ├── hook-techniques.md     # signatures, inline hooks, patches, vtable, GOT/PLT
-    │   ├── so-analysis.md         # analyzing libminecraftpe.so directly (no game needed)
+    │   ├── hook-techniques.md     # inline hooks, patches, vtable, GOT/PLT, library-boundary hooks
+    │   ├── hook-engineering.md    # hook judgement & safety: site choice, fail-open, liveness
+    │   ├── signature-forensics.md # finding a function and proving it is usable
+    │   ├── so-analysis.md         # analyzing the target .so directly (no game needed)
     │   ├── build-deploy.md        # NDK+CMake build, manifest, .levipack, logcat
+    │   ├── version-porting.md     # porting checklist for new game versions
+    │   ├── render-pipeline-hooks.md          # visual effects on a closed renderer
+    │   ├── shader-source-injection.md        # patching GLSL as text
+    │   ├── instrumentation-and-diagnostics.md # self-diagnosing mods
+    │   ├── feature-rollback.md    # rollback / removal / rename discipline
     │   ├── ida-workflow.md        # optional IDA / IDA Pro MCP guidance
-    │   └── version-porting.md     # porting checklist for new game versions
+    │   └── lessons-learned.md     # distilled debugging experience
     ├── scripts/
-    │   ├── verify_signatures.py   # verify BedrockTools signatures on any .so
+    │   ├── verify_signatures.py   # verify signatures on any .so
     │   ├── elf_facts.py           # read-only ELF facts (std-lib only)
     │   ├── aarch64_enc.py         # encode AArch64 patch instructions
     │   ├── ida_mcp_client.py      # JSON-RPC client for IDA Pro MCP
@@ -61,7 +69,10 @@ The skill triggers on modding/hooking/signature/build tasks.
 
 Read `HOOK_TUTORIAL.md` end to end, or jump into
 `skills/bedrock-pe-modding/references/feature-workflow.md` for the thinking
-process and `references/hook-techniques.md` for the mechanics.
+process and `references/hook-techniques.md` for the mechanics. When a mod
+"does nothing" or looks wrong, the experience notes are usually the fastest
+route: `hook-engineering.md`, `signature-forensics.md`,
+`instrumentation-and-diagnostics.md` and `render-pipeline-hooks.md`.
 
 ## The workflow in one line
 

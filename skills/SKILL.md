@@ -84,6 +84,7 @@ behavior the user wants to change?* BedrockTools maps features to functions:
 | Attack cancel / hit detection | `GameModeAttack` / `SurvivalModeAttack` | inline hook + cancellable event |
 | Local player tick logic | `NormalTick` | inline hook + event |
 | Frame / render-loop logic | `eglSwapBuffers` (libEGL.so) | inline hook on exported symbol |
+| Visual effect on existing geometry (outline / tint / glow / depth tricks) | none — the graphics-API boundary itself | shader-source injection + two-pass draw, no signatures (see `references/render-pipeline-hooks.md`) |
 | Screen open/close detection | `ContainerScreenControllerOpen/Dtor`, `ChatScreenOpen/Dtor` | inline hook + event |
 | Hit result / reach | `LevelGetHitResult`, `HitResultGetEntity` | resolve + call as function |
 | Player name / skin | `ActorGetNameTag`, `ActorSetNameTag` + `offsets::Player::mName/mSkin` | inline hook / field access |
@@ -199,7 +200,21 @@ subscribe through the runtime ABI with `RuntimeListener<Event>`.
   hook-decision guide with worked examples.
 - `references/hook-techniques.md` — full hook technique reference: inline
   hooks, chains, head replacement, NOP/branch patches, vtable, GOT/PLT,
-  dlopen/EGL hooks, signature format rules.
+  dlopen/EGL hooks, signature format rules, library-boundary hooks.
+- `references/hook-engineering.md` — hook **judgement and safety**: picking the
+  mechanism (call vs hook vs patch vs vtable), choosing the narrowest site, hook
+  lifecycle and idempotence, fail-open rules (never drop a call, never let an
+  exception escape, never recurse through your own detour), proving a hook is
+  live, priorities/coexistence, real failure modes, observe-before-mutate
+  rollout. Read it before designing any interception, and whenever a hook
+  "works but does nothing" or crashes randomly.
+- `references/signature-forensics.md` — finding a function and **proving it is
+  usable**: what "usable" means (identity, uniqueness, ABI, lifetime, thread,
+  re-entrancy, side effects), anchors for finding candidates, how to build a
+  pattern that survives version bumps, the evidence ladder (shape -> structure ->
+  decompiler -> runtime observation -> behavioural A/B), how to prove it is safe
+  to call, version drift, and a ship checklist. Read it before hooking any
+  function you have not personally observed at runtime.
 - `references/so-analysis.md` — analyze the `.so` on disk without a device:
   ELF header, segments/sections, dynamic symbols, strings, signature
   verification, and the Python-only checklist.
@@ -208,6 +223,34 @@ subscribe through the runtime ABI with `RuntimeListener<Event>`.
 - `references/ida-workflow.md` — optional IDA / IDA Pro MCP guidance
   (generic; any IDA version).
 - `references/version-porting.md` — porting checklist for new game versions.
+- `references/render-pipeline-hooks.md` — distilled experience for **visual
+  effects on a closed-source renderer**: choosing the hook layer, wrapping
+  every API resolution path, defensive shader-source injection, self-reporting
+  heuristics, GL state hygiene, the two-pass shell and the geometry rules that
+  decide whether it looks right, capping additive brightness, rollback
+  discipline and artifact verification. Read it before starting any
+  outline / tint / glow / material-effect mod, and whenever a rendering mod
+  "does nothing" or looks wrong.
+- `references/shader-source-injection.md` — the mechanics of patching GLSL as
+  text: insertion anatomy, comment-stripped offset mapping, identifier
+  discovery by normalised family, component-count correctness, interface/link
+  safety (varyings vs uniforms), which stages cannot be patched, and how to
+  host-test the transform. Read it before injecting anything into shaders.
+- `references/instrumentation-and-diagnostics.md` — how to build a mod that
+  explains its own failures: log design rules, canaries, instrumenting the
+  API's silent errors, the observe-only instrumentation build, hot-path cost
+  discipline, log delivery (platform log vs file), and what to ask the user
+  for. Read it whenever a mod "does nothing" or a device log is needed.
+- `references/feature-rollback.md` — rollback, removal and rename discipline:
+  keeping a known-good state, delete-code-not-flags, proving a removal (source
+  grep + shipped-binary strings + size), preserving the surviving path,
+  renaming a shipped deliverable at every layer, and recording why a feature
+  was removed.
+- `references/lessons-learned.md` — distilled experience: why forcing
+  upstream gates fails, fixing at the drop site, reversing working
+  references, and debugging process. Read it whenever a GUI item icon is
+  missing, stretched, submitted-but-invisible, updated after `setItem`, or
+  affected by container open/close lifecycle.
 
 ## Scripts
 
