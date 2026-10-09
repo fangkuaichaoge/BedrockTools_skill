@@ -46,6 +46,9 @@ already had one level deeper, you hooked too high.
 3. **Handle "the library is not loaded yet."** Do not fail; keep a short watcher
    and process each library once, with a per-library "done" flag. A mod that
    itself depends on a sibling library can report false success otherwise.
+   **Do not hook `dlopen` to detect this**, and do not treat "mapped" as
+   "ready" — see `mod-lifecycle-and-crash-safety.md`, which is the detailed
+   treatment of this case.
 4. **Tear down cleanly** on disable: remove detours, and null out your cached
    original pointers so a later enable re-resolves them.
 5. **Never install a detour you cannot call through.** If the original pointer
@@ -105,6 +108,7 @@ Do steps 2-4 in that order; skipping to 4 is how a wrong-site hook becomes a
 | Hook works in one build, not another | signature drift (see `signature-forensics.md`) |
 | The game stutters or the log explodes | logging/allocation in a per-draw or per-tick detour |
 | Random crash shortly after enabling | exception escaping the detour, or recursion through a name-resolved "original" |
+| The launcher/game dies at startup and asks to re-import the mod | the attach ran before the game library was mapped or before it finished relocating — see `mod-lifecycle-and-crash-safety.md` |
 | Effect appears far away from the hooked feature | leaked engine state (a flag/blend/binding not restored) |
 | Only one of several mods works | two mods patching the same address without priorities |
 | Interception works but the feature is unchanged | you hooked a path the engine does not actually use for that case (check the arrival canary per entry point) |

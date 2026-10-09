@@ -90,6 +90,13 @@ behavior the user wants to change?* BedrockTools maps features to functions:
 | Player name / skin | `ActorGetNameTag`, `ActorSetNameTag` + `offsets::Player::mName/mSkin` | inline hook / field access |
 | Weather / biome | `WeatherTick`, `WeatherIsRaining`, `BiomeGetTemperature` | inline hook or field access via `offsets::Weather` |
 | Packet send to server | `LoopbackPacketSenderSendToServer` | inline hook (inspect/modify before send) |
+| Bone / model pose (position, rotation, scale) | bone lookup + its transform record | inline hook on the lookup, edit the returned record (see `references/signature-forensics.md` §9) |
+
+**Before installing a single hook**, read
+`references/mod-lifecycle-and-crash-safety.md`. The preloader enables mods
+*before* the game library is mapped, so `enable()` must poll for the library and
+then let it settle. Getting this wrong crashes the launcher, which then asks the
+user to re-import the mod — with no usable stack trace.
 
 ### Step 2. Locate the function
 
@@ -208,6 +215,13 @@ subscribe through the runtime ABI with `RuntimeListener<Event>`.
   live, priorities/coexistence, real failure modes, observe-before-mutate
   rollout. Read it before designing any interception, and whenever a hook
   "works but does nothing" or crashes randomly.
+- `references/mod-lifecycle-and-crash-safety.md` — **startup timing and crash
+  safety**: why the preloader enables mods before the game library is mapped,
+  why hooking `dlopen` to wait for it crashes the launcher, the poll-then-settle
+  attach sequence that works, explicit hook-engine init, how to diagnose "the
+  launcher dies and asks me to re-import", stale-config repair, and the rule
+  that a preset must not pin a player-facing toggle. Read it before writing
+  `load()`/`enable()`, and whenever the host process dies at startup.
 - `references/signature-forensics.md` — finding a function and **proving it is
   usable**: what "usable" means (identity, uniqueness, ABI, lifetime, thread,
   re-entrancy, side effects), anchors for finding candidates, how to build a
@@ -264,6 +278,18 @@ subscribe through the runtime ABI with `RuntimeListener<Event>`.
   .so + resources) and verify the result.
 - `scripts/elf_facts.py` — read-only ELF facts (header, segments, sections,
   dynamic symbols, version strings) for a fresh `.so`.
+- `scripts/a64.py` — offline AArch64/ELF helper: `xref` (ADRP+ADD/LDR data
+  references), `disas` (linear disassembly), `func` (enclosing function from
+  `.eh_frame_hdr`), `callers` (direct BL callers), `ptr` (data pointers equal to
+  an address). Answers "which function is this inside" and "who calls it"
+  without a disassembler GUI.
+- `scripts/mksig.py` — generate a wildcard signature from a function head
+  (house-style or `--tight`), print its match count, and emit a ready-to-paste
+  C++ literal block with the separator placed correctly. See
+  `references/signature-forensics.md` §9 for the traps it avoids.
+- `scripts/sigscan.py` — scan a `.so` for named wildcard patterns
+  (`UNIQUE`/`AMBIGUOUS`/`MISSING`), or search its strings with `--strings`.
+  Use it to verify that a generated pattern is unique before you hook it.
 
 ## Notes
 

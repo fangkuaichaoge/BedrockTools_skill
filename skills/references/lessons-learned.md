@@ -122,3 +122,31 @@ The full write-up lives in `render-pipeline-hooks.md`. The short version:
 - Revert on request by deleting code and proving it (source grep + strings
   scan of the shipped binary), and write down why a feature was removed.
 
+## 10. Startup crashes: "the launcher dies and asks me to re-import"
+
+The full write-up lives in `mod-lifecycle-and-crash-safety.md`. The short
+version, because this one is expensive to rediscover:
+
+- **Never hook `dlopen` to learn when the game library appeared.** It is the
+  hottest function in a Java host process; your detour runs on arbitrary threads
+  for every load, and getting the re-entrancy/unhook ordering wrong recurses
+  until the stack dies. A *timing* problem does not justify that blast radius.
+- The preloader enables mods **before** the game library is mapped, so `enable()`
+  must never assume it is present. Poll with `dlopen(RTLD_NOLOAD)` (which never
+  loads anything) on a watcher thread with a bounded budget.
+- **"Mapped" is not "ready".** Right after the library appears the linker may
+  still be running relocations. Wait a few seconds (a settle delay) before
+  resolving signatures or installing hooks. This was the actual fix for a
+  crash that survived several other corrections.
+- Initialise the hook engine explicitly before the first install; do not rely on
+  it self-initialising.
+- When a user says "the hooks work in my other environment but this host dies",
+  the problem is **lifecycle, not hook correctness**. Compare against a mod that
+  works on the same host and diff the *design*, not the feature.
+- Fixing the code is not enough when a saved config holds a value written by the
+  buggy build: version the config and repair the stale value on load.
+- A preset must not pin a game toggle the player uses (e.g. the camera
+  perspective), or the game's own control looks broken. Keep such pins off by
+  default and named so that is obvious ("Don't Touch").
+
+

@@ -70,6 +70,7 @@ or patches, compile an arm64 `.so`, and verify it.
 | `skills/bedrock-pe-modding/references/feature-workflow.md` | feature -> function -> feasibility -> hook decision |
 | `skills/bedrock-pe-modding/references/hook-techniques.md` | full hook technique reference |
 | `skills/bedrock-pe-modding/references/hook-engineering.md` | hook judgement and safety: mechanism choice, site choice, lifecycle, fail-open rules, proving liveness, coexistence, failure modes |
+| `skills/bedrock-pe-modding/references/mod-lifecycle-and-crash-safety.md` | startup timing and crash safety: preloader load order, why not to hook `dlopen`, poll-then-settle attach, diagnosing "the launcher dies and asks me to re-import", stale-config repair |
 | `skills/bedrock-pe-modding/references/signature-forensics.md` | finding a function and proving it is usable: anchors, pattern design, evidence ladder, ABI/thread/re-entrancy checks, ship checklist |
 | `skills/bedrock-pe-modding/references/so-analysis.md` | direct `.so` analysis (ELF/sections/symbols/strings/signatures) |
 | `skills/bedrock-pe-modding/references/build-deploy.md` | NDK+CMake build, manifest, .levipack, deploy |
@@ -80,7 +81,7 @@ or patches, compile an arm64 `.so`, and verify it.
 | `skills/bedrock-pe-modding/references/instrumentation-and-diagnostics.md` | building self-diagnosing mods: log design, canaries, API error instrumentation, observe-only builds, hot-path cost, log delivery |
 | `skills/bedrock-pe-modding/references/feature-rollback.md` | rollback/removal/rename discipline: known-good state, delete-not-disable, proving removal, preserving the surviving path |
 | `skills/bedrock-pe-modding/references/lessons-learned.md` | distilled debugging experience (gates, drop sites, item rendering, rendering-effects pointer) |
-| `skills/bedrock-pe-modding/scripts/` | verify_signatures, elf_facts, aarch64_enc, ida_mcp_client, package_levipack, ida_decompile_targets |
+| `skills/bedrock-pe-modding/scripts/` | verify_signatures, elf_facts, aarch64_enc, ida_mcp_client, package_levipack, ida_decompile_targets, a64, mksig, sigscan |
 | `HOOK_TUTORIAL.md` | user-facing full tutorial |
 | `github-upload/bedrock-pe-modding/` | clean GitHub-ready copy of this repo package |
 

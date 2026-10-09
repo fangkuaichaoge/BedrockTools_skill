@@ -139,3 +139,117 @@ engine uses a different path (`hook-engineering.md` §5).
 - [ ] ABI, `this`-validity, init order, thread and re-entrancy are understood.
 - [ ] The mutation is behind a toggle with a neutral default.
 - [ ] Failure to resolve leaves the target working (fail-open).
+
+## 9. Generating patterns mechanically (and the traps in doing so)
+
+Hand-writing long patterns is error-prone. Generate them from the function head
+with a small script (see `../scripts/mksig.py`): disassemble, keep the opcode
+structure and register moves, and wildcard everything that encodes an address or
+a branch displacement. Two modes are useful:
+
+* **house style** — wildcard every instruction carrying an immediate or memory
+  operand. Longer-lived across builds, weaker.
+* **tight** — wildcard only absolute-address and branch operands, keep field
+  offsets fixed. Much stronger, more version-sensitive.
+
+Verify the generated pattern immediately: it must match exactly once, and that
+match must be the intended function head (not merely "some" unique site).
+
+### Trap 1: adjacent string literals fuse without a separator
+
+If you emit a pattern across multiple C++ string literals, adjacent literals
+**concatenate with no separator inserted**:
+
+```cpp
+inline constexpr std::string_view Sig =
+    "EA 0F 1C FC E9 A3 00 6D"     // no trailing space!
+    "FD FB 01 A9 F5 17 00 F9";    // -> "...00 6DFD FB 01 A9..."
+```
+
+The result contains the malformed token `6DFD`, which can never match. The bug
+is invisible in the source and only shows up as "the signature never resolves".
+
+**Fix:** put the separator at the **start** of each continuation line. Leading
+whitespace survives formatters; trailing whitespace does not.
+
+```cpp
+inline constexpr std::string_view Sig =
+    "EA 0F 1C FC E9 A3 00 6D"
+    " FD FB 01 A9 F5 17 00 F9";   // leading space keeps the tokens apart
+```
+
+**Guard:** verify the header by *parsing it the way a compiler would* —
+concatenate the literals, then assert every token is either `??` or exactly two
+hex digits. A malformed token means the concatenation is wrong. Do this in the
+build's verification script so it cannot regress.
+
+Note that `inline constexpr` variables the linker does not need are **dropped**
+from the shipped `.so`, so "the pattern string is absent from the binary" is not
+evidence of a problem. Verify against the header, not the binary.
+
+### Trap 2: verify a hash algorithm, do not assume it
+
+When the game looks something up by a name hash, the exact algorithm and the
+exact operation order matter. FNV-1 and FNV-1a differ only in the order of the
+multiply and the xor, and produce completely different values:
+
+```cpp
+// FNV-1a: xor THEN multiply
+h = (h ^ byte) * prime;
+
+// FNV-1:  multiply THEN xor        <-- the one some builds actually use
+h = (h * prime) ^ byte;
+```
+
+Getting this wrong means every lookup misses silently.
+
+**Method:** find one or two values the game is known to use (a reference mod that
+asserts them on a real device, or a value you can read out of the binary), then
+pin them as **compile-time assertions** so the order cannot be changed by
+accident:
+
+```cpp
+constexpr std::uint64_t fnv1_64(const char* s) { /* multiply, then xor */ }
+
+static_assert(fnv1_64("head")   == 0xF153217ED86AE247ULL, "hash mismatch");
+static_assert(fnv1_64("hat")    == 0xD8C4C1186B9B0C08ULL, "hash mismatch");
+static_assert(fnv1_64("helmet") == 0x3B70E40D69930B2EULL, "hash mismatch");
+```
+
+This caught a real mistake at compile time instead of shipping a feature that
+silently did nothing.
+
+### Trap 3: a small accessor is a bad signature, but a fine offset
+
+A three-instruction accessor such as `add x0, x0, #0x70; ret` is the generic
+shape a compiler emits for *every* small getter, so it will never be unique —
+one such pattern matched 60+ sites.
+
+That is not a problem for the feature: once you hold the object pointer, the
+field is just `base + 0x70`. Use the accessor as **evidence for the offset**, and
+do the arithmetic yourself rather than trying to resolve or call it.
+
+### Trap 4: prove a struct layout from the copy width
+
+To find a struct's true size, find the code that copies it. A block copied by
+
+```
+ldp q1, q0, [x1]        ; 32 bytes
+ldr w8, [x1, #0x20]     ; +4  -> 36 bytes total
+stp q1, q0, [x0, #0x70]
+str w8,  [x0, #0x90]
+```
+
+is **36 bytes**, not the 40 a first guess suggested. Deriving the size from the
+load/store widths is decisive; guessing from a "looks about right" offset is not.
+
+### Trap 5: check what the return value actually is
+
+A function ending in `add x0, x11, #0x18; ret` looks like "returns the record at
+`node+0x18`". Confirm it by reading the *callers* before believing it: if every
+caller immediately does `ldp x8, x9, [x0]` (a begin/end pair) and null-checks
+`x0`, the function returns a **container**, and `node+0x18` is merely where that
+container lives. Treating it as a record would corrupt memory.
+
+**Rule: read the callers before writing to a return value.** The callee's tail
+tells you where the value starts; the callers tell you what it *is*.
