@@ -78,6 +78,8 @@ or patches, compile an arm64 `.so`, and verify it.
 | `skills/bedrock-pe-modding/references/shader-source-injection.md` | patching GLSL as text: insertion, identifier discovery, component counts, interface/link safety, unpatchable stages, host tests |
 | `skills/bedrock-pe-modding/references/instrumentation-and-diagnostics.md` | building self-diagnosing mods: log design, canaries, API error instrumentation, observe-only builds, hot-path cost, log delivery |
 | `skills/bedrock-pe-modding/references/feature-rollback.md` | rollback/removal/rename discipline: known-good state, delete-not-disable, proving removal, preserving the surviving path |
+| `skills/bedrock-pe-modding/references/block-model-replacement.md` | replacing a block's model at the per-face emitter layer: why the original must always run, diagonal-quad reachability, base colour vs per-vertex AO, atlas UV clamping, batch dedup, overlap-culling trap |
+| `skills/bedrock-pe-modding/references/verifying-unrun-cpp.md` | delivering code you cannot execute: risk classification, byte-pattern uniqueness, a second implementation plus source-level assertions that the C++ is the same algorithm, cross-compiler type checking, settling ABI claims from disassembly, self-reporting builds, techniques that only look like verification, recorded dead ends, and how to report the remaining gap |
 | `skills/bedrock-pe-modding/references/lessons-learned.md` | distilled debugging experience (gates, drop sites, item rendering, rendering-effects pointer) |
 | `skills/bedrock-pe-modding/scripts/` | verify_signatures, elf_facts, aarch64_enc, ida_mcp_client, package_levipack, ida_decompile_targets, a64, mksig, sigscan, multi_verify, offset_check |
 | `CLAUDE.md` | Claude Code / other-agent companion to this file |
