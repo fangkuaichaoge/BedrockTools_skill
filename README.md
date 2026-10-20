@@ -1,7 +1,7 @@
 # bedrock-pe-modding
 
 **Minecraft Bedrock (PE) native modding skill + hooking tutorial**, distilled
-from the open-source [BedrockTools](https://github.com/RadiantByte/BedrockTools)
+from the open-source [BedrockTools](https://github.com/QYCottage/BedrockTools)
 project. It teaches how to hook and patch `libminecraftpe.so` (Android
 arm64-v8a) for [LeviLauncher](https://github.com/LiteLDev/LeviLaunchroid) /
 [preloader-android](https://github.com/LiteLDev/preloader-android), from
@@ -93,7 +93,7 @@ version-sensitive.
 
 ## Related projects
 
-- [BedrockTools](https://github.com/RadiantByte/BedrockTools) — the method
+- [BedrockTools](https://github.com/QYCottage/BedrockTools) — the method
   source (GPL-3.0).
 - [preloader-android](https://github.com/LiteLDev/preloader-android) — the
   mod SDK (hook / signature / patch / mod-menu APIs).
