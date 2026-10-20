@@ -17,6 +17,55 @@ Everything below is deliberately **machine-agnostic**: replace
 machine you are on. The code examples follow BedrockTools' code exactly; do
 not invent new abstractions.
 
+## Tool selection — read this before analyzing anything
+
+A Bedrock `.so` is hundreds of megabytes. **Do not start a disassembler's
+auto-analysis on it.** That is the single most common way this work goes wrong:
+the analysis does not finish in a reasonable time, it produces a multi-gigabyte
+database, and the answer you actually needed was two call-graph edges away.
+
+**Answer every structural question offline first.** The helper does it in
+seconds:
+
+```bash
+python scripts/a64.py func    <libminecraftpe.so> --addr 0x...     # which function is this in
+python scripts/a64.py callers <libminecraftpe.so> --addrs 0x...    # who calls it
+python scripts/a64.py cluster <libminecraftpe.so> --addrs 0x,...   # which drivers call this family
+python scripts/a64.py guards  <libminecraftpe.so> --addrs 0x...    # what mask gates those calls
+python scripts/a64.py xref    <libminecraftpe.so> --addrs 0x...    # who references this data
+python scripts/a64.py disas   <libminecraftpe.so> --addr 0x...     # linear disassembly
+```
+
+| Question | Tool | Never |
+|---|---|---|
+| Which function contains this address? | `a64.py func` | disassembler |
+| Who calls this? How many callers? | `a64.py callers` | disassembler |
+| Which few drivers call this whole family? | `a64.py cluster` | disassembler |
+| What bit-mask gates these calls? | `a64.py guards` | disassembler |
+| Who references this string/vtable? | `a64.py xref` | disassembler |
+| What are these instructions? | `a64.py disas` | disassembler |
+| What does this ONE function do, in C? | a disassembler MCP, **by address** | full auto-analysis |
+| Verify a signature is unique | `scripts/verify_signatures.py`, `scripts/sigscan.py` | disassembler |
+
+Rules that make this stick:
+
+1. **Locate first, decompile second.** Never open a disassembler until you can
+   name the exact address you want decompiled. Finding that address is offline
+   work.
+2. **Never ask a disassembler for an overview** of a game library, and never
+   let it "analyze the binary". Ask it about one function by address.
+3. **If a heavy tool is still running after a minute or two, stop waiting** and
+   answer the question offline. Come back to the heavy tool only for the
+   pseudocode of one function that still puzzles you.
+4. **A disassembler is optional; the workflow must not depend on it.** If none
+   is installed, offline analysis is still sufficient to locate, hook and
+   verify.
+
+Full method, including the two facts that make offline analysis cheap and the
+pitfalls that waste an afternoon: `references/targeted-static-analysis.md`.
+Using a disassembler MCP provider without fighting it:
+`references/rea-and-disassembler-providers.md`.
+
 ## Architecture (understand before coding)
 
 - **Load chain**: LeviLauncher (Java) -> `libpreloader.so` (C++ loader:
@@ -31,7 +80,9 @@ not invent new abstractions.
   `dlopen("libminecraftpe.so", RTLD_NOW | RTLD_NOLOAD)`.
 - **Function location**: the game `.so` is stripped. BedrockTools stores
   **byte-signatures** (function-head machine code with `?` wildcards) and
-  resolves them at runtime via `pl::memory::resolveSignatures`.
+  resolves them at runtime via `pl::memory::resolveSignatures`. When you need a
+  function BedrockTools does not have, locate it **offline** (see "Tool
+  selection" above) rather than by opening a disassembler.
 - **Version sensitivity**: signatures, member offsets, and vtable slots
   change per game version. Porting = re-extract/re-verify (see
   `references/version-porting.md`).
@@ -91,6 +142,7 @@ behavior the user wants to change?* BedrockTools maps features to functions:
 | Weather / biome | `WeatherTick`, `WeatherIsRaining`, `BiomeGetTemperature` | inline hook or field access via `offsets::Weather` |
 | Packet send to server | `LoopbackPacketSenderSendToServer` | inline hook (inspect/modify before send) |
 | Bone / model pose (position, rotation, scale) | bone lookup + its transform record | inline hook on the lookup, edit the returned record (see `references/signature-forensics.md` §9) |
+| Replace a block's **model** (custom mesh for a block category) | `BlockTessellator::_tessellateFace{Up,Down,North,South,East,West}` + `Tessellator::vertexUV` | inline hooks: suppress the original's vertices, emit your own through the real vertex emitter (see `references/block-model-replacement.md`) |
 
 **Before installing a single hook**, read
 `references/mod-lifecycle-and-crash-safety.md`. The preloader enables mods
@@ -100,24 +152,39 @@ user to re-import the mod — with no usable stack trace.
 
 ### Step 2. Locate the function
 
-Preferred, no reverse-engineering required:
+Do this **offline** (see "Tool selection" above). In order of preference:
 
 1. BedrockTools already ships a signature for it (`Signatures.cpp`) -> resolve
    it and you are done.
-2. If not: search BedrockTools/community sources for the function name; use a
-   disassembler only as a helper (optional, see `references/ida-workflow.md`).
+2. Search BedrockTools/community sources for the function name.
+3. A string the function uses -> `a64.py xref` on the string's address (search
+   for the **full NUL-terminated literal**, including any namespace prefix).
+4. A sibling function you already know -> `a64.py cluster` to find the driver
+   that calls the whole family, then `a64.py disas` around the calls.
+5. `a64.py func` to label any address with its enclosing function.
 
-### Step 3. Decompile / analyze (optional but recommended for new functions)
+### Step 3. Understand the function (decompile is the LAST resort)
 
-If the function is not already documented, use IDA / Ghidra (any install) to
-decompile the function at the resolved address and confirm:
+Answer as much as possible offline first — the guard pattern and the argument
+setup usually give away the mechanism without any pseudocode:
 
-- What it returns and what it does (does it read/write fields? call vtable slots?).
-- Whether the behavior is data-driven (patch a constant / field) or
-  logic-driven (need a hook before/after).
-- Its signature / calling convention (arm64: args in X0..., return in X0/W0/S0).
+- **What decides this call?** `a64.py guards` reads the `tbz`/`tbnz` bit tests
+  around a call site, which is how you recover a decision mask.
+- **Where do the arguments come from?** `a64.py disas` backwards from the call:
+  register moves, stack temporaries, and virtual-call results are all visible.
+- **Which function is this inside?** `a64.py func`.
 
-Decompilation is **optional**: the workflow must not depend on it.
+Only then, if the control flow is still unclear, open a disassembler **on that
+one address** (`rea function <so> <addr>`, or IDA/Ghidra by hand) to read the
+pseudocode. Confirm:
+
+- what it returns and what it does (fields read/written, vtable slots called);
+- whether the behavior is data-driven (patch a constant/field) or logic-driven
+  (hook before/after);
+- its calling convention (arm64: args in X0..., return in X0/W0/S0).
+
+Decompilation is **optional**: the workflow must not depend on it, and it must
+never be the first step.
 
 ### Step 4. Decide feasibility, then choose the hook technique
 
@@ -232,6 +299,22 @@ subscribe through the runtime ABI with `RuntimeListener<Event>`.
 - `references/so-analysis.md` — analyze the `.so` on disk without a device:
   ELF header, segments/sections, dynamic symbols, strings, signature
   verification, and the Python-only checklist.
+- `references/targeted-static-analysis.md` — **answer precise questions about a
+  multi-hundred-megabyte stripped binary in seconds**: why a full auto-analysis
+  is the wrong tool, the two facts that make it cheap (file offset == vaddr, and
+  bulk `BL` decoding with integer arithmetic), the anchor → family → callers →
+  cluster → guards → argument-setup workflow, recovering function boundaries
+  from `.eh_frame_hdr`, and the pitfalls (a call being unconditional does not
+  mean the callee is unconditionally visible; re-derive conclusions per build).
+  Read it before any "how does the engine do X" question on a big target.
+- `references/rea-and-disassembler-providers.md` — using an MCP disassembler
+  provider (REA) **precisely**: when it helps (pseudocode of one located
+  function) and when offline analysis is faster, the setup traps (provider
+  version too old for the supervisor API, MCP Python SDK 2.x renaming
+  `fastmcp`, missing `idalib` binding, hosts-blocked downloads), registration
+  shapes (stdio vs a long-lived supervisor URL), querying by address with a
+  warm database, and treating the output's `limitations` as unknown-not-absent.
+  Read it when a disassembler is available and you need pseudocode.
 - `references/build-deploy.md` — NDK+CMake build, xmake build, manifest,
   .levipack packaging, deployment, logcat verification.
 - `references/ida-workflow.md` — optional IDA / IDA Pro MCP guidance
@@ -256,6 +339,17 @@ subscribe through the runtime ABI with `RuntimeListener<Event>`.
   discipline and artifact verification. Read it before starting any
   outline / tint / glow / material-effect mod, and whenever a rendering mod
   "does nothing" or looks wrong.
+- `references/block-model-replacement.md` — replacing a **block's model** with a
+  custom mesh: why the per-face geometry emitters are the right hook layer, why
+  the original must always run with only its vertices suppressed, why the
+  engine's own culling must not be repeated, how diagonal quads vanish unless
+  they are reachable from both of their axes (and the dedup id that stops the
+  fix double-drawing), per-face base colour vs per-vertex ambient occlusion,
+  atlas-tile UV clamping, batch dedup and the GUI/item icon it breaks, safe
+  block-name lookup, the overlap-culling trap (a protrusion is not covered by a
+  sparse shell), bake-verbatim discipline with area/UV assertions, and the
+  diagnostic rule that a filter which does not filter destroys the evidence.
+  Read it before any "change how block X looks" task.
 - `references/shader-source-injection.md` — the mechanics of patching GLSL as
   text: insertion anatomy, comment-stripped offset mapping, identifier
   discovery by normalised family, component-count correctness, interface/link
@@ -291,9 +385,12 @@ subscribe through the runtime ABI with `RuntimeListener<Event>`.
   dynamic symbols, version strings) for a fresh `.so`.
 - `scripts/a64.py` — offline AArch64/ELF helper: `xref` (ADRP+ADD/LDR data
   references), `disas` (linear disassembly), `func` (enclosing function from
-  `.eh_frame_hdr`), `callers` (direct BL callers), `ptr` (data pointers equal to
-  an address). Answers "which function is this inside" and "who calls it"
-  without a disassembler GUI.
+  `.eh_frame_hdr`), `callers` (direct BL callers), `cluster` (group a family's
+  call sites into their driver functions), `guards` (the bit tests that follow
+  each call, revealing a per-call decision mask), `ptr` (data pointers equal to
+  an address). Answers "which function is this inside", "who calls it", "which
+  few drivers call this whole family", and "what mask gates those calls" without
+  a disassembler GUI. See `references/targeted-static-analysis.md`.
 - `scripts/mksig.py` — generate a wildcard signature from a function head
   (house-style or `--tight`), print its match count, and emit a ready-to-paste
   C++ literal block with the separator placed correctly. See

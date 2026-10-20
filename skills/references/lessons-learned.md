@@ -149,4 +149,38 @@ version, because this one is expensive to rediscover:
   perspective), or the game's own control looks broken. Keep such pins off by
   default and named so that is obvious ("Don't Touch").
 
+## 11. Replacing a block's model
+
+The full write-up lives in `block-model-replacement.md`. The parts worth
+carrying in your head, because each one cost a separate debugging round:
+
+- Hook the **per-face geometry emitters**, always run the original, and suppress
+  only its vertices. Its caller reads back the state it writes.
+- **The engine already culled.** It skips hidden faces before calling you; a
+  second visibility test at your layer deletes visible geometry.
+- **A diagonal quad must be emitted from every axis its normal spans.** Baked
+  into one group, it disappears whenever the block is viewed from the other
+  direction. Pair the fix with a per-quad dedup id, or the two copies z-fight.
+  Prove it numerically: an isolated block's drawn area must equal the model's.
+- **Colour comes from the per-face base value, not the per-vertex colours.**
+  Those are ambient occlusion and are darker. The tell is the user saying
+  "turning smooth lighting off fixes it".
+- **An atlas tile is not a tiling texture.** Clamp UVs into the rectangle; do
+  not wrap.
+- Dedup emission on `(tessellator, position)` — the `Block*` is reused across
+  blocks — and reset the table from a `begin()` hook or the GUI item icon
+  disappears.
+- **Never cull a protruding piece just because a neighbour exists.** A block
+  model is a sparse shell, so the neighbour may have no geometry there; the
+  result is holes. Ask which artefact the user prefers (completeness vs no
+  flicker), and when a mechanism is rejected, delete it rather than re-tune it.
+- **The bake step must be verbatim**, with area and UV-count assertions. Two
+  quads can share geometry and still be distinct surfaces with different UVs.
+- **A diagnostic filter that does not filter is worse than no log.** It buries
+  the evidence it exists to collect. Budget by category, and log the negative
+  result (reached the hook but was not classified) with its name.
+- **Identify the build the device actually runs** from a run-time-discovered
+  value, not from a file name; several game files may share a directory and the
+  one you analysed may not be the one running.
+
 
