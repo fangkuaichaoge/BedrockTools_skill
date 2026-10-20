@@ -75,13 +75,14 @@ or patches, compile an arm64 `.so`, and verify it.
 | `skills/bedrock-pe-modding/references/so-analysis.md` | direct `.so` analysis (ELF/sections/symbols/strings/signatures) |
 | `skills/bedrock-pe-modding/references/build-deploy.md` | NDK+CMake build, manifest, .levipack, deploy |
 | `skills/bedrock-pe-modding/references/ida-workflow.md` | optional IDA / IDA Pro MCP guide |
-| `skills/bedrock-pe-modding/references/version-porting.md` | porting checklist |
+| `skills/bedrock-pe-modding/references/version-porting.md` | supporting several builds from one `.so`: signature portability (house style vs `--tight`), object-layout porting, per-build hit matrix, making the check unskippable |
+| `skills/bedrock-pe-modding/references/hud-buttons-and-icon-art.md` | launcher HUD buttons: bridge validation rules, the ButtonInfo workaround for active-PNG icons, toggle event semantics, embedded byte-array art, Pillow icon pipeline with offline verification |
 | `skills/bedrock-pe-modding/references/render-pipeline-hooks.md` | experience notes for visual effects on a closed-source renderer (hook layer choice, shader-source injection, GL state hygiene, shell geometry, brightness budgets, rollback, artifact verification) |
 | `skills/bedrock-pe-modding/references/shader-source-injection.md` | patching GLSL as text: insertion, identifier discovery, component counts, interface/link safety, unpatchable stages, host tests |
 | `skills/bedrock-pe-modding/references/instrumentation-and-diagnostics.md` | building self-diagnosing mods: log design, canaries, API error instrumentation, observe-only builds, hot-path cost, log delivery |
 | `skills/bedrock-pe-modding/references/feature-rollback.md` | rollback/removal/rename discipline: known-good state, delete-not-disable, proving removal, preserving the surviving path |
 | `skills/bedrock-pe-modding/references/lessons-learned.md` | distilled debugging experience (gates, drop sites, item rendering, rendering-effects pointer) |
-| `skills/bedrock-pe-modding/scripts/` | verify_signatures, elf_facts, aarch64_enc, ida_mcp_client, package_levipack, ida_decompile_targets, a64, mksig, sigscan |
+| `skills/bedrock-pe-modding/scripts/` | verify_signatures, elf_facts, aarch64_enc, ida_mcp_client, package_levipack, ida_decompile_targets, a64, mksig, sigscan, multi_verify, offset_check |
 | `HOOK_TUTORIAL.md` | user-facing full tutorial |
 | `github-upload/bedrock-pe-modding/` | clean GitHub-ready copy of this repo package |
 

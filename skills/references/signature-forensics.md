@@ -253,3 +253,52 @@ container lives. Treating it as a record would corrupt memory.
 
 **Rule: read the callers before writing to a return value.** The callee's tail
 tells you where the value starts; the callers tell you what it *is*.
+
+### Trap 6: `--tight` is precise, not portable
+
+`--tight` mode wildcards only absolute-address and branch operands, leaving
+object field offsets fixed. That is the strongest possible pattern against the
+build it came from — and the most fragile against any other. It stops matching
+as soon as the compiler reshuffles a struct or changes an inlining decision,
+which is routine between two builds of the same game.
+
+The failure is easy to misread as "the function moved" or "the feature was
+removed", when in fact the pattern was simply over-fitted. Before re-deriving
+anything, regenerate the pattern in **house style** (wildcard every immediate and
+memory operand) from the same function head and try again — that alone recovers
+most of a version port.
+
+When a house-style pattern then turns out AMBIGUOUS, the fix is to append the
+next few **structural** instructions (register moves, distinctive opcodes), not
+to pin more displacements. A worked example: a generic FOV-getter pattern
+matched 1 site in one build and 2 in another because both functions shared the
+prologue up to `fmov s8, s0`. The real getter continued `mov w20, w1 / mov
+x19, x0`; adding those two instructions restored uniqueness in every build
+without fixing a single displacement.
+
+**Rule: choose the mode by how many builds must match.** One build -> `--tight`
+is fine. Several builds from one `.so` -> house style, verified per build. See
+`references/version-porting.md`.
+
+### Trap 7: a resolved signature does not mean a compatible layout
+
+This is the expensive one. A pattern can resolve to the correct function in a new
+build while the struct that function operates on has shifted — so the feature
+installs cleanly and then writes to the wrong field. Nothing errors; the bug
+looks like a logic problem.
+
+Signatures and object layout are **independent porting tasks**:
+
+* the pattern proves *which function* you found;
+* only the displacements inside it prove *which fields* it touches.
+
+Check both. `scripts/offset_check.py` reads the displacements back out of the
+game's own disassembly so a hard-coded `this + 0xNNN` can be compared against
+ground truth in each build.
+
+One subtlety: an offset missing from your scan is a question, not a verdict. The
+field may simply be written by a different function. Widen to the whole `.text`
+and compare **writer counts** across builds — matching counts mean the same
+field. For a `float3` position, look for the *group* (`#0x61c` / `#0x620` /
+`#0x624` written consecutively); the group surviving at the same displacement in
+several builds is strong evidence the layout held.

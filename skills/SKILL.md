@@ -236,7 +236,18 @@ subscribe through the runtime ABI with `RuntimeListener<Event>`.
   .levipack packaging, deployment, logcat verification.
 - `references/ida-workflow.md` — optional IDA / IDA Pro MCP guidance
   (generic; any IDA version).
-- `references/version-porting.md` — porting checklist for new game versions.
+- `references/version-porting.md` — supporting several game builds from one
+  `.so`: why `--tight` patterns stop matching, house-style portability, the two
+  independent porting tasks (signatures vs object layout), the per-build hit
+  matrix, and making the check unskippable.
+- `references/hud-buttons-and-icon-art.md` — launcher HUD buttons from a native
+  mod: what the bridge really validates, the missing active-PNG setter and the
+  `ButtonInfo` workaround, toggle event semantics, embedding art as generated
+  byte arrays, and drawing pixel-art icons with Pillow (sampled ink colours,
+  alpha-mask recolouring, keycap compositing) with offline verification.
+  The launcher's stock button art (keycap bases + glyph pairs, 512x512 PNG)
+  ships in `assets/hud-button-templates/` as the style reference and
+  compositing base.
 - `references/render-pipeline-hooks.md` — distilled experience for **visual
   effects on a closed-source renderer**: choosing the hook layer, wrapping
   every API resolution path, defensive shader-source injection, self-reporting
@@ -290,6 +301,14 @@ subscribe through the runtime ABI with `RuntimeListener<Event>`.
 - `scripts/sigscan.py` — scan a `.so` for named wildcard patterns
   (`UNIQUE`/`AMBIGUOUS`/`MISSING`), or search its strings with `--strings`.
   Use it to verify that a generated pattern is unique before you hook it.
+- `scripts/multi_verify.py` — verify a whole signature set against **several
+  builds at once** and print a hit-count matrix. The only acceptable result is
+  1 in every column. This is the tool that answers "is my mod compatible with
+  these versions?" — see `references/version-porting.md`.
+- `scripts/offset_check.py` — read the struct displacements a function actually
+  uses back out of the game's disassembly, per build. Signatures and object
+  layout are independent porting tasks; this checks the second one, where a
+  mismatch is silent rather than an error.
 
 ## Notes
 
