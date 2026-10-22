@@ -17,7 +17,7 @@ or patches, compile an arm64 `.so`, and verify it.
   projects in the workspace may be used only as build-environment references,
   never as the methodology source for deliverables.
 - For any hooking/modding/IDA/signature/build task, **read the skill first**:
-  `skills/bedrock-pe-modding/SKILL.md` plus its `references/` and `scripts/`.
+  `skills/SKILL.md` plus its `references/` and `scripts/`.
   The skill uses the shared `SKILL.md` frontmatter convention
   (`name` + `description`), which Codex, Claude Code, Cursor, and other
   agents can all discover.
@@ -35,7 +35,7 @@ or patches, compile an arm64 `.so`, and verify it.
 2. **Verify signatures**:
 
    ```bash
-   python skills/bedrock-pe-modding/scripts/verify_signatures.py <libminecraftpe.so> \
+   python skills/scripts/verify_signatures.py <libminecraftpe.so> \
        --sigs <BedrockTools .../src/core/memory/Signatures.cpp> --json sig_report.json
    ```
 
@@ -47,7 +47,7 @@ or patches, compile an arm64 `.so`, and verify it.
    `pl::memory::writeBytes` (patch, verify original bytes first). Follow
    BedrockTools code shapes exactly.
 5. **Build**: NDK + CMake (see
-   `skills/bedrock-pe-modding/references/build-deploy.md`); the output must
+   `skills/references/build-deploy.md`); the output must
    export `PLGetModRegistration`.
 6. **Deploy & verify**: manifest.json + `.so` into the launcher's `mods/`
    directory; check logcat.
@@ -66,27 +66,28 @@ or patches, compile an arm64 `.so`, and verify it.
 
 | Path | Content |
 |---|---|
-| `skills/bedrock-pe-modding/SKILL.md` | skill entry: architecture, API table, standard workflow |
-| `skills/bedrock-pe-modding/references/feature-workflow.md` | feature -> function -> feasibility -> hook decision |
-| `skills/bedrock-pe-modding/references/hook-techniques.md` | full hook technique reference |
-| `skills/bedrock-pe-modding/references/hook-engineering.md` | hook judgement and safety: mechanism choice, site choice, lifecycle, fail-open rules, proving liveness, coexistence, failure modes |
-| `skills/bedrock-pe-modding/references/mod-lifecycle-and-crash-safety.md` | startup timing and crash safety: preloader load order, why not to hook `dlopen`, poll-then-settle attach, diagnosing "the launcher dies and asks me to re-import", stale-config repair |
-| `skills/bedrock-pe-modding/references/signature-forensics.md` | finding a function and proving it is usable: anchors, pattern design, evidence ladder, ABI/thread/re-entrancy checks, ship checklist |
-| `skills/bedrock-pe-modding/references/so-analysis.md` | direct `.so` analysis (ELF/sections/symbols/strings/signatures) |
-| `skills/bedrock-pe-modding/references/build-deploy.md` | NDK+CMake build, manifest, .levipack, deploy |
-| `skills/bedrock-pe-modding/references/ida-workflow.md` | optional IDA / IDA Pro MCP guide |
-| `skills/bedrock-pe-modding/references/version-porting.md` | supporting several builds from one `.so`: signature portability (house style vs `--tight`), object-layout porting, per-build hit matrix, making the check unskippable |
-| `skills/bedrock-pe-modding/references/hud-buttons-and-icon-art.md` | launcher HUD buttons: bridge validation rules, the ButtonInfo workaround for active-PNG icons, toggle event semantics, embedded byte-array art, Pillow icon pipeline with offline verification |
-| `skills/bedrock-pe-modding/references/render-pipeline-hooks.md` | experience notes for visual effects on a closed-source renderer (hook layer choice, shader-source injection, GL state hygiene, shell geometry, brightness budgets, rollback, artifact verification) |
-| `skills/bedrock-pe-modding/references/shader-source-injection.md` | patching GLSL as text: insertion, identifier discovery, component counts, interface/link safety, unpatchable stages, host tests |
-| `skills/bedrock-pe-modding/references/instrumentation-and-diagnostics.md` | building self-diagnosing mods: log design, canaries, API error instrumentation, observe-only builds, hot-path cost, log delivery |
-| `skills/bedrock-pe-modding/references/feature-rollback.md` | rollback/removal/rename discipline: known-good state, delete-not-disable, proving removal, preserving the surviving path |
-| `skills/bedrock-pe-modding/references/block-model-replacement.md` | replacing a block's model at the per-face emitter layer: why the original must always run, diagonal-quad reachability, base colour vs per-vertex AO, atlas UV clamping, batch dedup, overlap-culling trap |
-| `skills/bedrock-pe-modding/references/verifying-unrun-cpp.md` | delivering code you cannot execute: risk classification, byte-pattern uniqueness, a second implementation plus source-level assertions that the C++ is the same algorithm, cross-compiler type checking, settling ABI claims from disassembly, self-reporting builds, techniques that only look like verification, recorded dead ends, and how to report the remaining gap |
-| `skills/bedrock-pe-modding/references/lessons-learned.md` | distilled debugging experience (gates, drop sites, item rendering, rendering-effects pointer) |
-| `skills/bedrock-pe-modding/scripts/` | verify_signatures, elf_facts, aarch64_enc, ida_mcp_client, package_levipack, ida_decompile_targets, a64, mksig, sigscan, multi_verify, offset_check |
+| `skills/SKILL.md` | skill entry: architecture, API table, standard workflow |
+| `skills/references/feature-workflow.md` | feature -> function -> feasibility -> hook decision |
+| `skills/references/hook-techniques.md` | full hook technique reference |
+| `skills/references/hook-engineering.md` | hook judgement and safety: mechanism choice, site choice, lifecycle, fail-open rules, proving liveness, coexistence, failure modes |
+| `skills/references/mod-lifecycle-and-crash-safety.md` | startup timing and crash safety: preloader load order, why not to hook `dlopen`, poll-then-settle attach, diagnosing "the launcher dies and asks me to re-import", stale-config repair |
+| `skills/references/signature-forensics.md` | finding a function and proving it is usable: anchors, pattern design, evidence ladder, ABI/thread/re-entrancy checks, ship checklist |
+| `skills/references/so-analysis.md` | direct `.so` analysis (ELF/sections/symbols/strings/signatures) |
+| `skills/references/build-deploy.md` | NDK+CMake build, manifest, .levipack, deploy |
+| `skills/references/levilauncher-native-mod-guide.md` | host-side contract distilled from the official LeviLaunchroid docs: mod layout and manifest fields (entry must equal the built `.so`, `overwrite_*` default to not replacing, `minecraft_versions` gating), lifecycle (`load()` required, both `load()` and `load(ModContext&)` accepted), `NativeMod` handle, pinned FetchContent SDK, typed config merge semantics, Mod Menu, the Input API's missing unregister, memory APIs, packaging, ship checklist, and docs-vs-headers drift |
+| `skills/references/ida-workflow.md` | optional IDA / IDA Pro MCP guide |
+| `skills/references/version-porting.md` | supporting several builds from one `.so`: signature portability (house style vs `--tight`), object-layout porting, per-build hit matrix, making the check unskippable |
+| `skills/references/hud-buttons-and-icon-art.md` | launcher HUD buttons: bridge validation rules, the ButtonInfo workaround for active-PNG icons, toggle event semantics, embedded byte-array art, Pillow icon pipeline with offline verification |
+| `skills/references/render-pipeline-hooks.md` | experience notes for visual effects on a closed-source renderer (hook layer choice, shader-source injection, GL state hygiene, shell geometry, brightness budgets, rollback, artifact verification) |
+| `skills/references/shader-source-injection.md` | patching GLSL as text: insertion, identifier discovery, component counts, interface/link safety, unpatchable stages, host tests |
+| `skills/references/instrumentation-and-diagnostics.md` | building self-diagnosing mods: log design, canaries, API error instrumentation, observe-only builds, hot-path cost, log delivery |
+| `skills/references/feature-rollback.md` | rollback/removal/rename discipline: known-good state, delete-not-disable, proving removal, preserving the surviving path |
+| `skills/references/block-model-replacement.md` | replacing a block's model at the per-face emitter layer: why the original must always run, diagonal-quad reachability, base colour vs per-vertex AO, atlas UV clamping, batch dedup, overlap-culling trap |
+| `skills/references/verifying-unrun-cpp.md` | delivering code you cannot execute: risk classification, byte-pattern uniqueness, a second implementation plus source-level assertions that the C++ is the same algorithm, cross-compiler type checking, settling ABI claims from disassembly, self-reporting builds, techniques that only look like verification, recorded dead ends, and how to report the remaining gap |
+| `skills/references/lessons-learned.md` | distilled debugging experience (gates, drop sites, item rendering, rendering-effects pointer) |
+| `skills/scripts/` | verify_signatures, elf_facts, aarch64_enc, ida_mcp_client, package_levipack, ida_decompile_targets, a64, mksig, sigscan, multi_verify, offset_check, vtable_walk |
 | `HOOK_TUTORIAL.md` | user-facing full tutorial |
-| `github-upload/bedrock-pe-modding/` | clean GitHub-ready copy of this repo package |
+| `.github/workflows/ci.yml` | CI: compiles every script, checks SKILL.md frontmatter, smoke-tests two CLIs |
 
 ## 4. Ethics and safety
 

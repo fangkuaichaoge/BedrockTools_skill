@@ -126,6 +126,9 @@ Then:
 Typical tools: `decompile` (addr), `disasm` (addr, count), `strings`,
 `xrefs`, `segs`, `get_name`/`set_name`.
 
+`scripts/ida_mcp_client.py` talks to it from the shell and unwraps the JSON
+envelope so you read pseudocode rather than escaped `\n`.
+
 ## 7. Verifying a decompiled target against the signature table
 
 Full loop:
@@ -139,3 +142,60 @@ resolve signature (verify_signatures.py) -> address
 
 This closes the loop between "the signature hits" and "the function really is
 what we think it is".
+
+---
+
+## 8. Driving IDA by address (the productive mode)
+
+Auto-analysis of a 300 MB+ library is the wrong starting point: it takes hours,
+needs tens of GB, and still does not answer "which function is
+`BlockGraphics::initialize`". The productive loop is the reverse:
+
+```
+offline tools locate a candidate address  ->  IDA decompiles that one function
+```
+
+Rules that make it work:
+
+**8.1 Confirm which build the database holds, first.** A database opened from a
+different copy of the library silently invalidates every address. Ask IDA, don't
+assume:
+
+```python
+ida_nalt.retrieve_input_file_size()   # compare against the candidate builds
+idaapi.get_imagebase()                # expect 0x0
+```
+
+A byte check at a known address is a second opinion: if a resolved signature's
+function head is where you expect it, the database is the right one.
+
+**8.2 Decompile only what you cannot decide offline.** Decompiling a 16 KB
+function yields 12k lines; it is still the fastest way to answer "does this
+parse `blocks.json`". Decompiling the whole library is not.
+
+**8.3 Params through a file, never inline.** Shells rewrite quotes and braces on
+the way to a native program, so `{"addr":"0xa6db30"}` arrives malformed and you
+get a JSON parse error rather than an analysis error. Write the params to
+`q.json` and pass `@q.json` — the client already supports it.
+
+**8.4 Know what each call buys you.**
+
+| Question | Tool | Why this one |
+|---|---|---|
+| who calls this / who references this data | `xrefs_to` | same answer as offline `a64.py`, but includes data refs IDA has already typed |
+| which virtual slot is this call | decompile | the `this` about to be released names the object's real type |
+| what does this function *do* | decompile | the only way to distinguish semantically similar candidates |
+| is it unique / which builds have it | offline `scan_matrix.py` | IDA answers for one database at a time; portability is a multi-build question |
+
+**8.5 The decompiler resolves questions byte patterns cannot.** In one session,
+four candidate addresses for a named method all decompiled to
+`std::unordered_map` internals (bucket growth, node relink, node move). All four
+were plausible from their heads; one glance at the pseudocode eliminated the lot.
+Conversely, a 2-slot vtable immediately proves a class has no other virtual
+methods, which turns "keep looking" into "stop, the methods are non-virtual".
+
+**8.6 Do not expect the decompiler to name anything.** With no symbols the output
+is `sub_A664D78`, `v13`, `qword_13370428`. The decompiler gives *behaviour*;
+identity still comes from the string/RTTI/call-graph ladder in
+`signature-forensics.md` §10.
+

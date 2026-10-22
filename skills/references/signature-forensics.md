@@ -302,3 +302,122 @@ and compare **writer counts** across builds — matching counts mean the same
 field. For a `float3` position, look for the *group* (`#0x61c` / `#0x620` /
 `#0x624` written consecutively); the group surviving at the same displacement in
 several builds is strong evidence the layout held.
+
+---
+
+## 10. Identifying a function that nothing in the binary names
+
+You will be handed lists of function names — from a symbolized build, a newer
+signature table, a decompiler session on another version — and asked to produce
+signatures for **this** binary. Frequently the binary has no symbol for them and
+never did. This section is the evidence ladder for that case, and the point at
+which the correct answer is "not derivable from the binary alone".
+
+### 10.1 The ladder, strongest first
+
+**1. A prototype string used by an assert.** The strongest anchor that exists.
+Bedrock asserts pass `(message, expression, line, file, __PRETTY_FUNCTION__)`, so
+a function that asserts **names itself in rodata**, with the source file and line
+number. Find the string, `xref` it, and you have the function — no guessing.
+
+```
+0x25e7143  static const TextureAtlasItem &BlockGraphics::getTextureItem(
+               const std::string &, std::weak_ptr<AtlasItemManager>,
+               std::unordered_map<std::string, TextureAtlasItem> &)
+```
+
+Cross-check that the referencing code really is the assert pattern
+(`bl <AssertFailed>` then a deliberate `str 0xdeadc0de` trap store), so you are
+not looking at a logger that merely mentions the function.
+
+**2. RTTI -> typeinfo -> vtable.** Gives the virtual methods of a class, in slot
+order. Use `scripts/vtable_walk.py`. Two facts to read off it before anything
+else:
+
+* **slot count decides feasibility.** A class whose vtable has only two slots is
+  a destructor pair; every other member is non-virtual and a vtable walk will
+  never find it. Stop early instead of hunting.
+* **the PIE relocation trap.** On an image with base 0 the chain is stored in
+  `R_AARCH64_RELATIVE` relocations, so the 8-byte slots contain **zero** in the
+  file and the pointer lives in the `.rela.dyn` addend. Scanning raw qwords finds
+  nothing and looks identical to "this class has no RTTI". Read relocations.
+
+**3. An embedded source path groups a translation unit.** `.../BlockGraphics.cpp`
+in rodata does not name a function, but it tells you that every function
+referencing it lives in that one file — which turns "find it in 328 MB" into
+"find it in a few KB of code". Several functions in the same file may share the
+literal; treat the set as the candidate set.
+
+**4. A distinctive literal the function must use.** `blocks.json`,
+`texture_data`, `"No texture Atlas for block graphics."` — these identify a
+**role** rather than a name, and roles are often enough: the only function that
+parses `blocks.json` is the block-texture initialiser.
+
+**5. Call-graph position.** "the only callee that takes a `std::string` and
+returns a 176-byte struct", "called three times from the initialiser", "has one
+caller, and that caller is reached from a vtable slot". Position narrows a
+candidate set; it does not identify a member.
+
+**6. Read the pseudocode.** The only step that can *distinguish* semantically
+similar candidates. See §10.2 for why this is not optional.
+
+### 10.2 Ruling out is part of the job
+
+A candidate list is not progress until every entry is either confirmed or
+**eliminated with evidence**. Machine code lies about identity: four consecutive
+plausible candidates for `AtlasItemManager::getTextureItem` turned out to be
+`std::unordered_map` internals — bucket-array growth, node relinking, and a node
+move that copies a `std::string` at `node+40`. From byte patterns alone all four
+look like "a function that takes (this, something) and copies strings"; only the
+pseudocode says which.
+
+Two eliminations worth memorising:
+
+* **An indirect call is not automatically your virtual method.** In one function
+  the only `(*vptr + 0x10)` call was followed immediately by
+  `__shared_weak_count::__release_weak(this)` — so the object was the
+  **shared_ptr control block**, and the call was `_M_dispose`. The `this` being
+  released names the true type of the object; read one instruction further.
+* **No RTTI name is a fact about the class, not a search failure.** A class whose
+  name appears only inside mangled template arguments
+  (`__shared_ptr_emplace<AtlasItemManager>`) has no `type_info` name of its own;
+  the substring is not the RTTI name and will never resolve.
+
+### 10.3 Three ways a "function" can have no signature
+
+Before spending an afternoon, decide which of these you are looking at:
+
+| Situation | Evidence | What to do instead |
+|---|---|---|
+| **Inlined getter.** A one-line `return mField;` at every call site. | the inlinee's assert string appears in several unrelated functions; no standalone callee exists | hook the field access or the callers; do not chase a signature |
+| **Non-virtual method with no string/RTTI.** e.g. a lookup on a class that has only a virtual destructor. | class RTTI exists, its vtable has 2 slots, and no `Class::` string exists | you need a **call site** (see below) |
+| **Stale dictionary entry.** A pattern from an older build that matches nowhere, including its own baseline. | `MISSING` in every build tested | delete it; re-derive from a located call site rather than loosening |
+
+These are not failures of effort. Saying "not derivable from this binary, and
+here is what would make it derivable" is a better deliverable than a pattern that
+happens to be unique on one build and was never proven to be the right function.
+
+### 10.4 What actually unblocks the remainder
+
+Ask for these, in this order — each is cheap for the asker and decisive for you:
+
+1. **one call site address** for the named function. From a call site the callee
+   is one decompile away, and the signature follows mechanically.
+2. **the source of the name list** (which build, which tool, which version). If
+   it came from a symbolized image, half the list stops being a hunt.
+3. **a behavioural session**: hook a confirmed neighbour, log the arguments, and
+   let the log say which candidate the real path goes through.
+
+### 10.5 Ship decision: lead vs verified
+
+Every pattern carries an identity confidence independent of its hit count:
+
+* **verified** — identity proven by §10.1's ladder *and* the pattern resolves to
+  exactly one address in **every** build you support.
+* **lead** — pattern is unique but identity is unproven, or it resolves in only
+  some builds.
+
+Ship `verified` freely. Ship a `lead` only behind an observe-only mode, and say
+so. Never let a pattern's uniqueness stand in for its identity: those are two
+different questions, and a signature tool can only answer the second.
+

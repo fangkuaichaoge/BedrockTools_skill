@@ -144,7 +144,7 @@ Feature-to-function mapping (BedrockTools examples):
    modding wikis, or prior mod sources.
 3. **Optional disassembler**: if you must find a new function, use IDA/Ghidra
    (any install): find a related string (`Shift+F12`), follow its xref (`X`),
-   decompile (`F5`). See `skills/bedrock-pe-modding/references/ida-workflow.md`.
+   decompile (`F5`). See `skills/references/ida-workflow.md`.
 
 ## 5. Signatures
 
@@ -188,7 +188,7 @@ becomes:
 
 ## 6. Verifying signatures
 
-`skills/bedrock-pe-modding/scripts/verify_signatures.py` parses every
+`skills/scripts/verify_signatures.py` parses every
 signature from BedrockTools' `Signatures.cpp` and scans the `.so` executable
 bytes:
 
@@ -520,7 +520,7 @@ Then confirm the in-game effect.
 4. Check for PAC/BTI changes in function heads.
 5. Rebuild, redeploy, re-verify via logcat.
 
-See `skills/bedrock-pe-modding/references/version-porting.md` for the full
+See `skills/references/version-porting.md` for the full
 checklist.
 
 ## 13. Common pitfalls
@@ -560,4 +560,4 @@ BedrockTools-main/
 └── scripts/package_levipack.py                # .levipack packaging + verification
 ```
 
-Companion skill: `skills/bedrock-pe-modding/SKILL.md` and its references.
+Companion skill: `skills/SKILL.md` and its references.

@@ -7,11 +7,22 @@ http://127.0.0.1:13337/mcp by default.
 Usage:
     python ida_mcp_client.py tools/list
     python ida_mcp_client.py decompile '{"addr":"0x<address>"}'
-    python ida_mcp_client.py disasm '{"addr":"0x<address>","count":30}'
-    python ida_mcp_client.py xrefs '{"addr":"0x<address>"}'
+    python ida_mcp_client.py decompile @q.json
+    python ida_mcp_client.py disasm '{"addr":"0x<address>","max_instructions":30}'
+    python ida_mcp_client.py xrefs_to @q.json
+    python ida_mcp_client.py py_eval @code.json      {"code": "..."}
 
 Params may be a JSON string or "@file.json" (file containing JSON).
+**Prefer @file.** A shell (PowerShell especially) rewrites quotes and braces on
+the way to a native program, so an inline JSON argument silently becomes
+malformed; the file form cannot be mangled.
+
 Override the endpoint with the IDA_MCP_URL environment variable.
+
+Tool results are unwrapped before printing: `decompile` yields pseudocode,
+`disasm` yields instructions, `py_eval` yields stdout/stderr, instead of the
+raw JSON envelope. This matters because the server returns those payloads as a
+JSON *string*, so without unwrapping you read escaped `\\n` code.
 """
 
 from __future__ import annotations
@@ -97,6 +108,31 @@ def main() -> int:
         text = "\n".join(
             item.get("text", "") for item in result["content"]
             if isinstance(item, dict) and item.get("type") == "text")
+        # Many tools return a JSON blob as their text payload. Unwrap it so the
+        # output is the useful part, not escaped JSON:
+        #   decompile -> {"addr": ..., "code": "<pseudocode>"}
+        #   disasm    -> {"addr": ..., "instructions": "<asm>"}
+        #   py_eval   -> {"result": ..., "stdout": ..., "stderr": ...}
+        # `code` is checked after `stdout` because py_eval echoes the submitted
+        # code back in a `code` field.
+        try:
+            parsed = json.loads(text)
+        except (json.JSONDecodeError, TypeError):
+            parsed = None
+        if isinstance(parsed, dict):
+            if "stdout" in parsed or "stderr" in parsed:
+                text = (parsed.get("stdout") or "") + (parsed.get("stderr") or "")
+                if not text.strip():
+                    text = json.dumps(
+                        {k: v for k, v in parsed.items() if k != "code"},
+                        ensure_ascii=False, indent=2)
+            else:
+                for key in ("code", "instructions", "text", "result"):
+                    if isinstance(parsed.get(key), str):
+                        text = parsed[key]
+                        break
+                else:
+                    text = json.dumps(parsed, ensure_ascii=False, indent=2)
         print(text)
         if result.get("isError"):
             return 1

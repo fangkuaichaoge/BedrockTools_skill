@@ -12,6 +12,9 @@ that the method was applied.
 Read this before any "change how block X looks" task. Almost every failure below
 was expensive and none of them were obvious in advance.
 
+Companion file: `verifying-unrun-cpp.md` — how to defend the result when there is
+no host compiler and no device.
+
 ---
 
 ## 1. The hook layer: per-face geometry emitters
@@ -46,7 +49,10 @@ Two consequences that decide the whole design:
   category is engine-internal (something like a shared `geometry.<name>`), not a
   resource you can swap through a `.geo.json` — that path is for custom blocks.
 * **Resource-pack geometry**: cannot apply to vanilla block ids, and cannot see
-  the neighbour state that decides culling.
+  the neighbour state that decides culling. This is an engine limitation, not a
+  missing trick: `blocks.json` has no geometry field, geometry is attached only by
+  a behaviour-pack block component, and vanilla geometry is compiled into the
+  engine. It is the reason a native mod exists at all.
 
 ## 2. Always run the original; suppress only its vertices
 

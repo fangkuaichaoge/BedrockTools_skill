@@ -6,7 +6,7 @@ description: "Develop native mods and hooks for Minecraft Bedrock (PE) Android a
 # Bedrock PE Native Modding (BedrockTools patterns)
 
 This skill distills the mod/hook/SDK/build techniques of the open-source
-[BedrockTools](https://github.com/RadiantByte/BedrockTools) project into a
+[BedrockTools](https://github.com/QYCottage/BedrockTools) project into a
 reusable workflow. Target binary: Minecraft Bedrock Android **arm64-v8a**
 (`libminecraftpe.so`). Runtime: **LeviLauncher + preloader**; the preloader
 SDK is open source at
@@ -73,11 +73,16 @@ Using a disassembler MCP provider without fighting it:
   your mod -> `libminecraftpe.so` (loaded later by the game).
 - **Lifecycle**: preloader looks up the exported symbol `PLGetModRegistration()`
   and calls `load/enable/disable/unload`. Register with the
-  `PL_REGISTER_MOD(Type, instance)` macro (`pl/Mod.hpp`).
-- **Timing**: call `GlossInit(true)` first in `load()`. The game library may
-  not be loaded yet, so either hook `dlopen` (BedrockTools' approach in
-  `src/core/Runtime.cpp`) or probe with
-  `dlopen("libminecraftpe.so", RTLD_NOW | RTLD_NOLOAD)`.
+  `PL_REGISTER_MOD(Type, instance)` macro (`pl/Mod.hpp`); `load()` is required and
+  the rest are optional. The full host-side contract (manifest fields, config,
+  Mod Menu, input, packaging) is summarised in
+  `references/levilauncher-native-mod-guide.md`.
+- **Timing**: the game library may not be loaded when `enable()` runs, so either
+  probe with `dlopen("libminecraftpe.so", RTLD_NOW | RTLD_NOLOAD)` (do **not**
+  hook `dlopen` in a Java host process) or install from a watcher that polls then
+  lets the image settle — see `references/mod-lifecycle-and-crash-safety.md`.
+  `GlossInit(true)` is **not** the mod's job any more: `pl::memory::hook()` calls it
+  internally. Call it yourself only if you drive the raw `GlossHook` API directly.
 - **Function location**: the game `.so` is stripped. BedrockTools stores
   **byte-signatures** (function-head machine code with `?` wildcards) and
   resolves them at runtime via `pl::memory::resolveSignatures`. When you need a
@@ -294,8 +299,14 @@ subscribe through the runtime ABI with `RuntimeListener<Event>`.
   re-entrancy, side effects), anchors for finding candidates, how to build a
   pattern that survives version bumps, the evidence ladder (shape -> structure ->
   decompiler -> runtime observation -> behavioural A/B), how to prove it is safe
-  to call, version drift, and a ship checklist. Read it before hooking any
-  function you have not personally observed at runtime.
+  to call, version drift, and a ship checklist. **§10 covers the case where the
+  binary names nothing**: the anchor ladder for unnamed functions (prototype
+  strings used by asserts -> RTTI/vtable -> source-path strings -> distinctive
+  literals -> call-graph position -> pseudocode), why eliminating a candidate is
+  part of the job, the three ways a "function" can have no signature at all
+  (inlined getter, non-virtual member, stale dictionary entry), and what to ask
+  for when the answer really is "not derivable from this binary". Read it before
+  hooking any function you have not personally observed at runtime.
 - `references/so-analysis.md` — analyze the `.so` on disk without a device:
   ELF header, segments/sections, dynamic symbols, strings, signature
   verification, and the Python-only checklist.
@@ -317,8 +328,26 @@ subscribe through the runtime ABI with `RuntimeListener<Event>`.
   Read it when a disassembler is available and you need pseudocode.
 - `references/build-deploy.md` — NDK+CMake build, xmake build, manifest,
   .levipack packaging, deployment, logcat verification.
+- `references/levilauncher-native-mod-guide.md` — the **host side** distilled from
+  the official LeviLaunchroid docs (`docs.levimc.org/LeviLaunchroid`): mod
+  directory layout and the manifest fields that silently break a mod (`entry` must
+  equal the built `.so`, `overwrite_files`/`overwrite_folders` default to *not*
+  replacing, `minecraft_versions` gating), the lifecycle contract (`load()`
+  required, both `load()` and `load(ModContext&)` accepted), the `NativeMod`
+  metadata/path/logger handle, SDK linking via a **pinned** FetchContent tag, typed
+  config merge semantics, Mod Menu builders and draw commands, the Input API's
+  *missing unregister*, memory API surface and wildcard syntax, packaging, and a
+  ship checklist. §11 records docs-vs-headers drift and says which one to trust.
+  Read it before starting any new preloader mod, so the plumbing does not get
+  re-derived from scratch.
 - `references/ida-workflow.md` — optional IDA / IDA Pro MCP guidance
-  (generic; any IDA version).
+  (generic; any IDA version). §8 is the productive mode: **drive IDA by
+  address**, never let it auto-analyse a 300 MB+ library. Confirm which build
+  the database holds before trusting an address, decompile only what the offline
+  tools could not decide, pass tool params through a file (shells mangle inline
+  JSON), know which question each call answers, and remember the decompiler
+  yields behaviour — identity still comes from the anchors in
+  `signature-forensics.md` §10.
 - `references/version-porting.md` — supporting several game builds from one
   `.so`: why `--tight` patterns stop matching, house-style portability, the two
   independent porting tasks (signatures vs object layout), the per-build hit
@@ -350,6 +379,13 @@ subscribe through the runtime ABI with `RuntimeListener<Event>`.
   sparse shell), bake-verbatim discipline with area/UV assertions, and the
   diagnostic rule that a filter which does not filter destroys the evidence.
   Read it before any "change how block X looks" task.
+- `references/verifying-unrun-cpp.md` — delivering code you **cannot execute** (no
+  host toolchain, no device): classifying risk, byte-pattern uniqueness, a second
+  implementation in a runnable language plus source-level assertions that the C++
+  is the same algorithm, cross-compiler type checking, using disassembly to settle
+  ABI claims, self-reporting builds, the techniques that only *look* like
+  verification, recorded dead ends (retargeting NDK libc++ to WebAssembly), and how
+  to report the remaining gap so the user knows what still needs their hands.
 - `references/shader-source-injection.md` — the mechanics of patching GLSL as
   text: insertion anatomy, comment-stripped offset mapping, identifier
   discovery by normalised family, component-count correctness, interface/link
@@ -379,6 +415,10 @@ subscribe through the runtime ABI with `RuntimeListener<Event>`.
   decompile resolved addresses and write a JSON report.
 - `scripts/aarch64_enc.py` — encode AArch64 patch instructions (MOV/NOP/RET/BR/FMOV).
 - `scripts/ida_mcp_client.py` — JSON-RPC client for the IDA Pro MCP service.
+  Unwraps the server's JSON envelope (pseudocode / instructions / stdout) so a
+  decompile prints code instead of escaped JSON. Pass params as `@file.json`:
+  a shell rewrites quotes and braces on the way to a native program, so inline
+  JSON arrives malformed. See `references/ida-workflow.md` §8.
 - `scripts/package_levipack.py` — package a mod into `.levipack` (manifest +
   .so + resources) and verify the result.
 - `scripts/elf_facts.py` — read-only ELF facts (header, segments, sections,
@@ -406,6 +446,14 @@ subscribe through the runtime ABI with `RuntimeListener<Event>`.
   uses back out of the game's disassembly, per build. Signatures and object
   layout are independent porting tasks; this checks the second one, where a
   mismatch is silent rather than an error.
+- `scripts/vtable_walk.py` — recover a class's vtables offline from RTTI:
+  `RTTI name -> typeinfo -> vtable -> virtual function addresses`. Reads
+  `.rela.dyn`, because on a PIE image the pointer slots are **zero in the file**
+  and the value lives in the relocation addend — scanning raw qwords finds
+  nothing and looks like "no RTTI". The slot count is itself a finding: a 2-slot
+  vtable is a destructor pair, so every other member of that class is
+  non-virtual and this tool cannot find it. See
+  `references/signature-forensics.md` §10.
 
 ## Notes
 
