@@ -44,8 +44,8 @@ bedrock-pe-modding/
 │   └── workflows/ci.yml             # syntax + frontmatter + CLI smoke test
 └── skills/                          # the installable skill directory
     ├── SKILL.md                     # entry point: architecture, API table, workflow
-    ├── references/                  # 20 deep-dive notes, loaded on demand
-    ├── scripts/                     # 12 offline tools
+    ├── references/                  # 21 deep-dive notes, loaded on demand
+    ├── scripts/                     # 16 offline tools
     └── assets/
         └── hud-button-templates/    # 14 PNG button templates (normal + pressed)
 ```
@@ -59,7 +59,7 @@ Two layers, deliberately separate:
   to that directory (`references/…`, `scripts/…`), so the folder works wherever
   it is installed — the copy just has to keep the name your agent expects.
 
-### `skills/references/` — 20 notes
+### `skills/references/` — 21 notes
 
 | File | Answers |
 |---|---|
@@ -71,6 +71,7 @@ Two layers, deliberately separate:
 | `targeted-static-analysis.md` | "How do I answer precise questions about a 300 MB stripped binary in seconds?" |
 | `so-analysis.md` | "What can I learn from the `.so` on disk with no device?" |
 | `version-porting.md` | "How do I support several game builds from one `.so`?" |
+| `porting-a-live-mod.md` | "How do I add a new game build to a mod that already ships?" |
 | `build-deploy.md` | "How do I build an arm64 `.so`, package it, and verify it via logcat?" |
 | `levilauncher-native-mod-guide.md` | "What does the host side contract look like?" (manifest, lifecycle, config, Mod Menu, input) |
 | `ida-workflow.md` | "How do I drive IDA by address (incl. IDA Pro MCP) without wasting an afternoon?" |
@@ -84,7 +85,7 @@ Two layers, deliberately separate:
 | `verifying-unrun-cpp.md` | "How do I defend C++ I cannot compile or run here?" |
 | `lessons-learned.md` | distilled debugging experience across the above |
 
-### `skills/scripts/` — 12 tools
+### `skills/scripts/` — 16 tools
 
 | Script | Question it answers | Deps |
 |---|---|---|
@@ -94,6 +95,10 @@ Two layers, deliberately separate:
 | `multi_verify.py` | the same signature set across **several builds** — a hit-count matrix | stdlib |
 | `a64.py` | `func` / `callers` / `cluster` / `guards` / `xref` / `disas` / `ptr` on an AArch64 ELF | numpy, capstone |
 | `vtable_walk.py` | recover a class's vtables offline (`RTTI -> typeinfo -> vtable -> slots`) | stdlib |
+| `vtable_slot_map.py` | map a class's vtable slots between two builds and detect an inserted virtual | stdlib |
+| `getter_census.py` | which field is that? trivial getters + caller counts across builds | stdlib |
+| `ptr_vec_scan.py` | prove a component-pointer displacement by the vector load that follows it | stdlib |
+| `disp_census.py` | encoded-displacement census, optionally comparing two builds | stdlib |
 | `offset_check.py` | read back the struct displacements a function really uses, per build | numpy, capstone |
 | `elf_facts.py` | header / segments / sections / dynsym / version strings of a `.so` | stdlib |
 | `aarch64_enc.py` | encode AArch64 patch instructions (MOV / NOP / RET / BR / FMOV) | stdlib |

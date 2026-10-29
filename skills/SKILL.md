@@ -17,6 +17,15 @@ Everything below is deliberately **machine-agnostic**: replace
 machine you are on. The code examples follow BedrockTools' code exactly; do
 not invent new abstractions.
 
+## Workspace layout — one task, one folder
+
+Every mod build or reverse-engineering investigation gets its **own new
+directory**. Create it before writing the first file, and put every produced
+artifact there: sources, build outputs, analysis reports, screenshots and the
+packaged `.levipack`. Do not scatter files into the workspace root, into an
+unrelated mod's folder, or into the `skills/` tree. Reuse an existing folder
+only when continuing that same task.
+
 ## Tool selection — read this before analyzing anything
 
 A Bedrock `.so` is hundreds of megabytes. **Do not start a disassembler's
@@ -46,6 +55,8 @@ python scripts/a64.py disas   <libminecraftpe.so> --addr 0x...     # linear disa
 | What are these instructions? | `a64.py disas` | disassembler |
 | What does this ONE function do, in C? | a disassembler MCP, **by address** | full auto-analysis |
 | Verify a signature is unique | `scripts/verify_signatures.py`, `scripts/sigscan.py` | disassembler |
+| Which struct field moved between two builds? | `scripts/getter_census.py`, `scripts/ptr_vec_scan.py`, `scripts/disp_census.py` | eyeballing a header |
+| Which vtable slot moved, or was a virtual inserted? | `scripts/vtable_slot_map.py` on `vtable_walk.py` dumps | guessing an index |
 
 Rules that make this stick:
 
@@ -90,7 +101,11 @@ Using a disassembler MCP provider without fighting it:
   selection" above) rather than by opening a disassembler.
 - **Version sensitivity**: signatures, member offsets, and vtable slots
   change per game version. Porting = re-extract/re-verify (see
-  `references/version-porting.md`).
+  `references/version-porting.md` for the mechanics and
+  `references/porting-a-live-mod.md` for the end-to-end playbook: one `.so` for
+  several builds, a disjoint signature as the build-profile gate, runtime offset
+  selection, moving capture points, the diagnostic loop, and multi-build release
+  discipline).
 
 ## Core APIs (from the preloader SDK and BedrockTools)
 
@@ -294,6 +309,36 @@ subscribe through the runtime ABI with `RuntimeListener<Event>`.
   launcher dies and asks me to re-import", stale-config repair, and the rule
   that a preset must not pin a player-facing toggle. Read it before writing
   `load()`/`enable()`, and whenever the host process dies at startup.
+- `references/mod-menu-registration.md` — the **Mod Menu registration contract** read out
+  of the preloader source: `mod_id` must equal the mod folder name or be empty, the owner id
+  only exists while the preloader is calling `load()`/`enable()` synchronously, duplicate ids
+  are rejected, and every failure is silent. Includes the recipe that works (register from
+  `load()`, declare the id explicitly only when registering before the lifecycle) and the
+  checklist for "the module does not appear".
+- `references/container-and-slot-reversing.md` — how to enumerate **container contents**:
+  recovering a block actor's vtables, finding `getContainerSize` by scanning for a constant
+  return, finding `getItem` by its array arithmetic, why the direct accessor must be used
+  instead of the forwarding stub, and which numbers survive a game update.
+- `references/item-names-and-language.md` — **localized item names** through
+  `ItemStackBase::getName()` (non-virtual, `std::string` by value, sret in `x8`) and the
+  player's language through the engine's localization object, including the CJK cross-check
+  that turns a guessed offset into a verified one.
+- `references/preview-panels-and-container-ui.md` — building a **custom HUD panel** that
+  shows real container contents: capturing the UI render context, drawing item icons through
+  the engine's item renderer, measuring text before laying it out, paginating a 54-slot
+  container into columns, and the lifetime rules that stop such a mod from crashing when the
+  player leaves a save.
+- `references/container-preview-live-contents-and-icons.md` — an overlay that shows
+  **live container contents with correct icons**: the two-instance problem (which actor holds
+  fresh data and which one is drawable), record rules that keep the two apart, learning client
+  item identity from the engine's own item renderer, the `ItemStack` layout (152 bytes, shared
+  reference block at `+0x8`, description-id virtual at `0x2f0`), the private-reference-block
+  recipe for drawing items the drawable instance never held, the texture-atlas dead end, and
+  container screen open/close detection including the cross-container destructor crash.
+- `references/version-checkpoints-and-change-notes.md` — **checkpoint discipline**: when to
+  ask the user for a backup (a fix confirmed, a feature accepted, before a risky rework), the
+  immutable backup layout, the change-note template that records what/why/evidence/known
+  issues/rollback, and how to prove a rollback by hash.
 - `references/signature-forensics.md` — finding a function and **proving it is
   usable**: what "usable" means (identity, uniqueness, ABI, lifetime, thread,
   re-entrancy, side effects), anchors for finding candidates, how to build a
@@ -328,6 +373,13 @@ subscribe through the runtime ABI with `RuntimeListener<Event>`.
   Read it when a disassembler is available and you need pseudocode.
 - `references/build-deploy.md` — NDK+CMake build, xmake build, manifest,
   .levipack packaging, deployment, logcat verification.
+- `references/preloader-mod-implementation-notes.md` — field notes from a real
+  Android port, limited to traps the general references do not cover: runtime
+  image base for build-specific fallbacks (and the missing-FATAL symptom when it
+  is skipped), vtable-slot prototype verification, nearby-actor enumeration ABI,
+  overlay primitive/anchor specifics, locating the per-frame world renderer,
+  optional engine hooks and stale-cache cleanup, client-side scan budgeting, and
+  the crash-log nuance.
 - `references/levilauncher-native-mod-guide.md` — the **host side** distilled from
   the official LeviLaunchroid docs (`docs.levimc.org/LeviLaunchroid`): mod
   directory layout and the manifest fields that silently break a mod (`entry` must
@@ -352,6 +404,15 @@ subscribe through the runtime ABI with `RuntimeListener<Event>`.
   `.so`: why `--tight` patterns stop matching, house-style portability, the two
   independent porting tasks (signatures vs object layout), the per-build hit
   matrix, and making the check unskippable.
+- `references/porting-a-live-mod.md` — the **end-to-end playbook for adding a new
+  build to a mod that already ships**: the compatibility contract (one `.so`,
+  legacy branch untouched), using the upstream release that declares its target
+  build, fallbacks plus a disjoint signature as the build-profile gate, moving
+  struct offsets/vtable slots with their evidence counts, capture points that move
+  even when the old signature still resolves (new text virtual, object discovered
+  from the engine's own queue), the pinned-`adrp` signature trap, differential
+  old-build testing, the diagnostic-log decision tree, the release checklist and
+  a pitfalls list. Read it before any "port this mod to version X" task.
 - `references/hud-buttons-and-icon-art.md` — launcher HUD buttons from a native
   mod: what the bridge really validates, the missing active-PNG setter and the
   `ButtonInfo` workaround, toggle event semantics, embedding art as generated
@@ -409,6 +470,9 @@ subscribe through the runtime ABI with `RuntimeListener<Event>`.
 
 ## Scripts
 
+- `scripts/check_mod_signatures.py` — read the signatures out of a **mod source file** and
+  verify each one resolves exactly once in **every** build you ship, reporting MISSING and
+  AMBIGUOUS. Exit code gates a release.
 - `scripts/verify_signatures.py` — scan a `.so` for all signatures parsed
   from BedrockTools `Signatures.cpp`; report UNIQUE/AMBIGUOUS/MISSING.
 - `scripts/ida_decompile_targets.py` — optional IDAPython batch script to
@@ -454,6 +518,20 @@ subscribe through the runtime ABI with `RuntimeListener<Event>`.
   vtable is a destructor pair, so every other member of that class is
   non-virtual and this tool cannot find it. See
   `references/signature-forensics.md` §10.
+- `scripts/vtable_slot_map.py` — map one RTTI class's vtable slots between two
+  builds by masking PC-relative immediates in each slot function's prologue and
+  matching what remains. Shows unchanged slots, a uniform shift from an inserted
+  virtual, and rewritten slots. Feed it dumps produced by `vtable_walk.py`.
+- `scripts/getter_census.py` — find trivial field getters (`ldr x0,[x0,#imm]; ret`)
+  and count their direct callers. The same accessor in two builds has a nearly
+  identical caller count; the displacement it returns is where the field is, which
+  proves moves like a base-class span growing by one alignment unit.
+- `scripts/ptr_vec_scan.py` — count "load pointer field at candidate displacement,
+  then load a Vec3/Vec2 from that pointer". Component pointers (state vector,
+  rotation component) show their displacement moving by the count migrating.
+- `scripts/disp_census.py` — encoded-displacement census over the executable
+  segments, optionally comparing two builds side by side. Cheap way to form
+  hypotheses about which displacement moved; prove with the tools above.
 
 ## Notes
 

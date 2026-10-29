@@ -74,9 +74,11 @@ or patches, compile an arm64 `.so`, and verify it.
 | `skills/references/signature-forensics.md` | finding a function and proving it is usable: anchors, pattern design, evidence ladder, ABI/thread/re-entrancy checks, ship checklist |
 | `skills/references/so-analysis.md` | direct `.so` analysis (ELF/sections/symbols/strings/signatures) |
 | `skills/references/build-deploy.md` | NDK+CMake build, manifest, .levipack, deploy |
+| `skills/references/preloader-mod-implementation-notes.md` | field notes from a real port: runtime base for build-specific fallbacks, vtable-slot verification, actor enumeration ABI, overlay specifics, per-frame render entry discovery, optional hooks/cache cleanup, scan budgeting, crash-log nuance |
 | `skills/references/levilauncher-native-mod-guide.md` | host-side contract distilled from the official LeviLaunchroid docs: mod layout and manifest fields (entry must equal the built `.so`, `overwrite_*` default to not replacing, `minecraft_versions` gating), lifecycle (`load()` required, both `load()` and `load(ModContext&)` accepted), `NativeMod` handle, pinned FetchContent SDK, typed config merge semantics, Mod Menu, the Input API's missing unregister, memory APIs, packaging, ship checklist, and docs-vs-headers drift |
 | `skills/references/ida-workflow.md` | optional IDA / IDA Pro MCP guide |
 | `skills/references/version-porting.md` | supporting several builds from one `.so`: signature portability (house style vs `--tight`), object-layout porting, per-build hit matrix, making the check unskippable |
+| `skills/references/porting-a-live-mod.md` | end-to-end playbook for adding a new build to a shipping mod: one `.so` with a runtime build profile, a disjoint signature as the build gate, moved offsets/vtable slots and their evidence tools, moving capture points (engine queue discovery), the pinned-`adrp` signature trap, differential old-build testing, the diagnostic-log decision tree, multi-build release discipline, pitfalls |
 | `skills/references/hud-buttons-and-icon-art.md` | launcher HUD buttons: bridge validation rules, the ButtonInfo workaround for active-PNG icons, toggle event semantics, embedded byte-array art, Pillow icon pipeline with offline verification |
 | `skills/references/render-pipeline-hooks.md` | experience notes for visual effects on a closed-source renderer (hook layer choice, shader-source injection, GL state hygiene, shell geometry, brightness budgets, rollback, artifact verification) |
 | `skills/references/shader-source-injection.md` | patching GLSL as text: insertion, identifier discovery, component counts, interface/link safety, unpatchable stages, host tests |
@@ -85,7 +87,7 @@ or patches, compile an arm64 `.so`, and verify it.
 | `skills/references/block-model-replacement.md` | replacing a block's model at the per-face emitter layer: why the original must always run, diagonal-quad reachability, base colour vs per-vertex AO, atlas UV clamping, batch dedup, overlap-culling trap |
 | `skills/references/verifying-unrun-cpp.md` | delivering code you cannot execute: risk classification, byte-pattern uniqueness, a second implementation plus source-level assertions that the C++ is the same algorithm, cross-compiler type checking, settling ABI claims from disassembly, self-reporting builds, techniques that only look like verification, recorded dead ends, and how to report the remaining gap |
 | `skills/references/lessons-learned.md` | distilled debugging experience (gates, drop sites, item rendering, rendering-effects pointer) |
-| `skills/scripts/` | verify_signatures, elf_facts, aarch64_enc, ida_mcp_client, package_levipack, ida_decompile_targets, a64, mksig, sigscan, multi_verify, offset_check, vtable_walk |
+| `skills/scripts/` | verify_signatures, elf_facts, aarch64_enc, ida_mcp_client, package_levipack, ida_decompile_targets, a64, mksig, sigscan, multi_verify, offset_check, vtable_walk, vtable_slot_map, getter_census, ptr_vec_scan, disp_census |
 | `HOOK_TUTORIAL.md` | user-facing full tutorial |
 | `.github/workflows/ci.yml` | CI: compiles every script, checks SKILL.md frontmatter, smoke-tests two CLIs |
 

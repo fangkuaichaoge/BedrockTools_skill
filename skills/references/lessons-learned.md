@@ -183,4 +183,111 @@ carrying in your head, because each one cost a separate debugging round:
   value, not from a file name; several game files may share a directory and the
   one you analysed may not be the one running.
 
+### From building a HUD preview mod
 
+- **A silently rejected menu registration looks exactly like a broken menu.** The preloader
+  requires `mod_id` to equal the mod *folder* name and only knows the owner while it is calling
+  `load()`/`enable()` synchronously. See `mod-menu-registration.md`.
+- **Do not validate pointers in the frame path.** A stale `/proc/self/maps` cache turns a safety
+  check into "the feature stops drawing". Prefer tick-based lifetime rules; see
+  `preview-panels-and-container-ui.md` §7.
+- **Never write one actor's stacks into another to "fix" latency.** It produced both a
+  use-after-free and disappearing item icons after a container screen re-synced the real container.
+- **Container slot indices are per class and stable across patch builds; internal offsets are
+  not.** Use the slots, verify them on every build, and prefer the direct array accessor over the
+  forwarding stub: `container-and-slot-reversing.md`.
+- **For names and language, ask the engine.** `ItemStackBase::getName()` and the localization
+  object give both, in the player's language, with no table to maintain:
+  `item-names-and-language.md`.
+- **A backup directory is read-only reference.** When a known-good copy exists, diff against it and
+  change only the working copy - never edit the backup to "keep them in sync".
+
+### From an abandoned feature (worth knowing before starting one)
+
+- **Check the input path before building the UI.** A control drawn in the game's UI space cannot be
+  hit-tested against touch coordinates without the UI scale; a HUD button cannot be added at run time
+  because the launcher snapshots its button list once. Both were discovered after the feature was
+  built, and either one alone makes such a feature impossible as designed.
+- **Give an unproven interaction two independent paths.** Here: a gesture plus a settings toggle that
+  performs the same action on close. That would have separated "input never reached us" from "the
+  action itself failed" in one test round instead of several.
+- **Keep a restore point of the last known-good release.** Restoring it (and force-rebuilding, since
+  the restored file is older than the object file) reproduced the shipped binary byte for byte,
+  including its hash - which is how the rollback was proven rather than assumed.
+
+### Container overlays: live data and icons
+
+- **Two instances, one position.** A container can exist twice in one process (same position, same
+  vtable, same write slot). The instance the crosshair resolves to is renderable but frozen; the
+  instance that receives changes is live but its items cannot be drawn. Log both pointers before
+  designing anything.
+- **Records: deduplicate by instance, invalidate by destruction, never expire by short age, never
+  clear on screen open/close.** A three-second window silently emptied the cache between opening and
+  closing a chest; a per-position dedupe let the stale copy overwrite the live record.
+- **One resolver for every detection path.** Crosshair, view cone and view ray returning different
+  instances looks exactly like "two panels that alternate when I move the view".
+- **The item renderer needs a client-side `Item`.** Learn identities by hooking the renderer the game
+  itself uses (hotbar/inventory go through it), then draw a temporary stack: shallow copy + a private
+  reference block pointing at the learned item. Writing the *shared* reference block in place is what
+  crashes.
+- **Item textures cannot be loaded by path** — they are in a packed atlas; the result is the
+  missing-texture placeholder.
+- **Icon source hygiene.** One global "drawable instance" gets overwritten by fallback
+  detection paths; if identities are also learned from it, the name -> Item* cache is
+  poisoned and icons vanish until the chest is opened again. Keep the drawable source per
+  position, register it only from the crosshair path, and learn identities only from it and
+  from the engine renderer hook.
+- **Cleaning up "experimental" switches can delete a working path.** One experiment was the only
+  thing drawing icons for tools; removing it with the others caused a new bug. Fold proven paths into
+  the main code before deleting their toggles.
+- **Force a rebuild after restoring an older source**, and prove a rollback by comparing hashes
+  rather than assuming it.
+### Container previews: input, icons and hardening rounds
+
+- **Touch aiming breaks the engine hit result**; cast the camera ray yourself and keep the hit result
+  as a secondary. Eye height ~1.62, direction from yaw/pitch, march to interaction range.
+- **Icon overlay works**: flat items from the live-data instance, block items from the block-position
+  instance, drawn in that order. Items neither holds are drawn from a captured per-item header + a
+  private reference block; never re-read the reference block out of the copied header (dangling), and
+  never fabricate block-shaped items.
+- **Learn item identities only from stacks the renderer accepts** (renderer hook + drawable instance).
+  Learning from the undrawable instance poisons the cache and items stop drawing permanently.
+- **Never gate logic on an `isReadable`/maps probe.** False negatives silently disabled close
+  detection (preview stuck hidden) and deleted live records (contents stopped updating).
+- **Container-open gate**: use this frame's target, hide only when the close hooks are installed,
+  count "already hooked" as success, and keep a timeout as a last resort.
+- **High-frequency write hooks**: forward first, then record under a lock; no allocation/formatting.
+- **Hardening rounds regress each other**: one mechanism per build, keep every known-good package,
+  prove rollbacks by hash, and treat backup folders as immutable (never rename them on version bumps).
+
+### Checkpoints
+
+- **Checkpoint only versions that work.** One checkpoint per project (the current usable release),
+  created after the user confirms it on device or a release package is produced. Do not checkpoint
+  intermediate or failed builds.
+- When a newer version becomes usable, create its checkpoint, verify it, then delete the superseded
+  one - the workspace should never hold a pile of "maybe" folders.
+- Backups stay immutable once written; if one is wrong, write the corrected folder and delete the old.
+- Prove a rollback by hash (rebuild, compare with the checkpoint package).
+- See `references/version-checkpoints-and-change-notes.md`.
+
+- **The moment a fix is confirmed or a feature is accepted, offer a checkpoint** and write a change note inside it.
+- Backups are immutable: new folder per checkpoint, never rename or overwrite. Renaming an old backup on a version bump lost a snapshot that had to be rebuilt from a script.
+- Prove a rollback by hash (rebuild, compare with the checkpoint's package) and force a rebuild after restoring older files.
+- See `references/version-checkpoints-and-change-notes.md`.
+
+### 1.26.60 layout shifts
+
+- **A base-class growth moves every derived field.** Confirm one offset from the game's own
+  disassembly (e.g. Actor::mDimension 0x1C0 -> 0x1E0), then assume sibling fields moved too:
+  Actor components +0x20, Player inventory proxy 0x570 -> 0x590, LevelRendererPlayer -8.
+- **Mine player-side offsets from call sites**: the instruction right before the call to your
+  target usually loads `this` (`ldr xN,[player,#imm]`) or `this`'s field. That is stronger
+  evidence than a getter that merely happens to use the same immediate.
+- **HitResult +44 is a Vec3**, not the block position; the block position stays at +32 in this
+  family. Changing a working +32 to +44 breaks target detection silently.
+- **`add x0,x0,#imm; ret` accessors are a cheap offset oracle**: enumerate them in both builds
+  and diff the immediate sets to see exactly which fields moved and by how much.
+- Use `rtti_vtables.py` (relocation image + RTTI vtables) and `align_vtables.py` (slot
+  alignment) before guessing at vtable layout; file-level pointer scans do not work because
+  `.data.rel.ro` is zero-filled and filled in by `.rela.dyn` at load time.

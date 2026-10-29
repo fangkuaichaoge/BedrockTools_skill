@@ -15,6 +15,10 @@ common and most expensive mistake:
 The second is far worse, because nothing errors. A signature that resolves is
 not evidence that the struct it points into has the same shape.
 
+For the **end-to-end playbook of adding a new build to a mod that already
+ships** — runtime build profile, moving capture points, the diagnostic loop and
+the release checklist — see `porting-a-live-mod.md`.
+
 ---
 
 ## 1. Decide the porting goal first
@@ -118,17 +122,15 @@ function you just located by signature and list the displacements it actually
 uses:
 
 ```bash
-python scripts/offset_check.py --sigs patterns.json --names SetupCamera \
-    --offsets 0x61c,0x624,0x628,0x62c,0x630,0xeb8,0xef8,0xf38 \
+python scripts/offset_check.py --sigs patterns.json --names <FunctionName> \
+    --offsets <disp1,disp2,disp3,...> \
     --so <build-a.so>,<build-b.so>
 ```
 
 ```text
     offset    build-a.so    build-b.so
-     0x61c            -            -
-     0x624            1            1
-     0xeb8            1            1
-     0xf38            -            -
+    <disp1>            -            -
+    <disp2>            1            1
 ```
 
 Any offset that appears in one column and not another needs a per-build offset
@@ -137,23 +139,22 @@ table rather than a shared constant.
 ### 3.2 A `-` does not always mean "incompatible"
 
 An offset may simply be used by a *different* function than the one you scanned.
-`SetupCamera` writes `+0xEB8` but never touches `+0x61C`; the camera transform at
-`+0x61C` is written elsewhere.
+A camera-style function may write one displacement but never touch another one
+that a nearby consumer reads.
 
 Before concluding that a layout changed, widen the search: scan the whole
 `.text` for that displacement and compare the **number of writers** across
 builds. If the counts match, the field is the same field.
 
 A stronger confirmation for a `float3` position: look for the *group*. A camera
-position is written as consecutive `str sX, [reg, #0x61c]` / `#0x620` / `#0x624`
-stores. Three builds writing the same group at the same displacement is solid
+position is written as consecutive stores at `<disp>` / `<disp + 4>` /
+`<disp + 8>`. Builds writing the same group at the same displacement is solid
 evidence the layout held.
 
 ### 3.3 Cross-check against a mod known to work on the device
 
-If another mod in the workspace is confirmed working, its offsets are
-ground truth. That is how the `+0x61C` camera position was identified: a working
-outline mod read the camera position from exactly that displacement.
+If another mod in the workspace is confirmed working, its read displacements are
+ground truth to compare against — not the only proof, but a strong cross-check.
 
 ---
 
@@ -224,7 +225,85 @@ expected-address table, will drift, and the drift is invisible until a port.
   touch the field before changing anything.
 - **Prefer the full pattern over a clever short one.** A short pattern that is
   ambiguous everywhere is not a porting win.
-- **Constant patches** (e.g. 64 -> 999) usually survive updates; **struct
-  offsets and vtable slots** are the most volatile.
+- **Constant patches** (e.g. `<old-value> -> <new-value>`) usually survive updates;
+  **struct offsets and vtable slots** are the most volatile.
 - **Fail loud.** When a pattern cannot be made portable, prefer MISSING (feature
   off) over a loose pattern that might match the wrong function.
+
+## Prove every signature on every build before shipping
+
+A signature that resolves on the build in front of you says nothing about the next one. Two
+failure modes are invisible at run time and both look like "the mod works but one feature is
+missing":
+
+* **MISSING** - the pattern is gone in that build, so `resolveSignature` returns 0 and the hook
+  silently never installs;
+* **AMBIGUOUS** - it matches several places, so the hook may land on an unrelated function.
+
+Neither is cosmetic. In a real port, a missing level-destructor signature was the root cause of a
+crash when leaving a save: the cleanup that hook performed never ran, and stale engine pointers
+survived into the next frame.
+
+Run the check offline, for every build, before packaging:
+
+```
+python scripts/check_mod_signatures.py --source <mod-dir>/src/main.cpp \
+    --binary <libminecraftpe-old.so> --binary <libminecraftpe-new.so>
+```
+
+It reads the `constexpr std::string_view` signatures out of the source, so the check can never
+drift from what ships, and exits non-zero when anything is missing or ambiguous.
+
+### Design so a missing signature is not fatal
+
+Removing the dependency beats finding a new pattern:
+
+* replace "clean up on level destruction" with a **timeout**: stamp the last tick of the object you
+  care about and drop every cached pointer when ticks stop. Leaving a save stops ticks, so the
+  cache clears itself and no signature is involved.
+* track "is this actor still alive" by the same rule (only actors that still tick can still exist),
+  instead of validating pointers per frame.
+* if a signature is optional (a nice-to-have label, an extra effect), resolve it separately and
+  degrade only that feature - never gate **all** hook installation on the hardest pattern.
+
+### Keep the check honest
+
+Delete the signature constants you stopped using. Unused patterns keep "failing" in the checker and
+train you to ignore its output; if a constant is genuinely kept for a fallback path, record why in a
+comment next to it.
+
+## Example: what one update's layout shifts look like (shape, not values)
+
+One update cycle can produce several independent shifts. Treat each as a hypothesis to *verify from
+the game's own code*, never as a rule to copy to another version. The values below are placeholders;
+substitute what your own builds show.
+
+| structure | old build | new build | how to prove it |
+|---|---|---|---|
+| base-class component pointers used by many consumers | `<d1>` / `<d2>` / `<d3>` / `<d4>` | `<d1'>` / `<d2'>` / `<d3'>` / `<d4'>` | trivial-getter census (same caller counts, new displacement) plus disassembly of the class's own consumers |
+| a proxy pointer reached from a very common base | `base + <p>` | `base + <p'>` | the game's own call sites (load right before the callee), or a trivial getter |
+| renderer camera fields | `<c1>` / `<c2>` / `<c3>` / `<c4>` | `<c1 - δ>` / `<c2 - δ>` / ... | the same accessor set moved by one uniform delta |
+| a UI-context vtable | slots `<a>`, `<b>`, `<c>`, ... | `<a>`, `<b+1>`, `<c+1>`, ... | slot-count delta plus per-slot fingerprint mapping |
+
+A `<delta>`-sized growth in a base class moves *every* derived field after it: one confirmed offset
+justifies checking the whole family, not just the values the base class happens to expose.
+
+A result struct can contain two same-shaped vector fields (e.g. a reach vector and a block
+coordinate). Block-targeting code normally reads the block coordinate; rewriting a working field to
+the other vector silently breaks every block-targeting feature while all signatures still resolve.
+Settle it by decompiling one consumer, never by field order.
+
+### Tools that made this practical
+
+- `rtti_vtables.py` - reconstructs the post-relocation memory image and walks RTTI class vtables.
+  These libraries keep `.data.rel.ro` zero-filled in the file; every pointer comes from
+  `R_AARCH64_RELATIVE` entries in `.rela.dyn`, so plain file scans find nothing.
+- `align_vtables.py` - aligns one class's vtable across two builds by disassembly similarity and
+  reports which slots moved.
+- `port_function.py` - rebuilds a wildcarded (house-style) pattern from an old function's bytes and
+  searches the new build, returning the new address when the body survived.
+- `cross_version_signature.py` - emits one pattern that matches a function head in several builds by
+  fixing only the instructions all builds agree on.
+- `fast_verify_signatures.py` - verifies a whole pattern table against a
+  multi-hundred-MB library in seconds (anchor search instead of scanning the text
+  once per pattern).

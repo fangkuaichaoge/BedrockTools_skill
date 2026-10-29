@@ -100,3 +100,43 @@ expected, what they saw, and the log. Give them the exact steps (a specific
 world, a specific action) so the log contains the interesting frames. When a
 log is ambiguous, add one line of instrumentation and ask again rather than
 adding several speculative fixes.
+
+## 8. File logs, and three traps found in the field
+
+Logcat is not always reachable: the user may be on a phone with no adb. A plain append-only file in
+a directory the launcher already owns solves that, and it survives a crash because every line is
+flushed:
+
+```
+/storage/emulated/0/Android/media/<launcher-package>/<ModName>.log
+```
+
+```cpp
+void logPrint(int priority, const char* format, ...) {
+    char buffer[768];
+    // vsnprintf into buffer, then:
+    //  - append to the open FILE* and fflush it
+    //  - and forward to __android_log_print with a fixed tag
+}
+```
+
+Open it once at the earliest entry point you control **and** again from the lifecycle callback (the
+first attempt can happen before external storage is ready). If the open fails, say so through
+logcat - "no log file" is then itself a diagnosis.
+
+Traps that cost real debugging time:
+
+* **A version banner that is not single-sourced lies to you.** A hardcoded startup string kept
+  reporting an old version after several rebuilds, which sent an entire debugging session at the
+  wrong binary. Print the version from the manifest or one constant, never from a literal written
+  once and forgotten.
+* **A per-frame validator can silently disable the feature.** A pointer check against a cached
+  `/proc/self/maps` snapshot returns "not readable" once the game maps more memory, and if the
+  check sits in the frame path the result is "draws nothing". If you need such a check, refresh on
+  a miss and fail open; better, remove it from the per-frame path entirely.
+* **Log once, not every frame.** Cache-build messages, resolution results and "first draw" belong
+  behind a `std::atomic_bool` / counter; a message that repeats hundreds of times per second is
+  noise that hides the one line you need.
+
+After the release is stable, delete the diagnostics: a shipped mod should not carry a logger the
+user never asked for (see `feature-rollback.md` for removal discipline).
