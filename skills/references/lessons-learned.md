@@ -8,6 +8,36 @@ read `render-pipeline-hooks.md` as well — it covers the API-boundary hook
 layer, shader-source injection, GL state hygiene, geometry rules for shell
 effects, and rollback discipline.
 
+## 0. Iron rules for working with the user
+
+These outrank every technique below. They are also in `AGENTS.md` §0, which is
+the canonical copy.
+
+1. **When a decision is uncertain, ask the user first — before building.**
+   Name the choice, the trade-off and your default, then ask what they want,
+   whether they have advice, and whether they have supplementary material
+   (a reference mod, a decompile, a screenshot, a spec). Ambiguity about
+   *semantics* ("does this marker mean slow, or impossible?"), about *scope*
+   ("should this also cover X?") and about *mechanism* ("the engine's renderer
+   or my own draw call?") must be resolved by asking, not by picking one and
+   shipping it. One question costs seconds; a wrong guess costs a build, a
+   device test round and a rollback. Read the evidence first so you only ask
+   about what is genuinely open.
+2. **Before hunting evidence, work out what the feature relates to.**
+   Start from the feature, not from a search: name the subsystem that owns the
+   behavior — which screen, which renderer, which item or block class, which
+   asset family — then find the engine function that already implements it and
+   read *that* one. Verify the underlying path exists (data path, render path,
+   input path) before building UI on top of it. A feature whose path does not
+   exist in this engine is not fixable by trying harder, and learning that
+   early is the point of the rule.
+3. **When the user says they have a tool, skill or reference, use it.**
+   A prepared script, skill, dump, IDA session, reference project or document
+   they name is the intended input. Load and use it rather than re-deriving
+   the same thing yourself; their material outranks your shortcut. If it
+   proves unusable, say so with the concrete reason and ask — never silently
+   substitute your own approach.
+
 ## 1. The failure pattern: forcing an upstream gate
 
 Symptom: an upstream "type / feature check" was patched to always return
@@ -276,6 +306,56 @@ carrying in your head, because each one cost a separate debugging round:
 - Prove a rollback by hash (rebuild, compare with the checkpoint's package) and force a rebuild after restoring older files.
 - See `references/version-checkpoints-and-change-notes.md`.
 
+### Waila-style overlays: icons, names and staying alive
+
+- **Queued vs immediate drawing.** Panel rectangles/images are queued and appear on flush; the
+  engine item renderer draws immediately. Flush the panel first, then draw the icon, then the text.
+  The other order looks like "the icon is invisible" (the panel is painted over it).
+- **Prefer the engine's own entry point over hand-built setup.** The inner item-renderer call is
+  not the public path: the game wraps it in a helper that prepares the stack, builds the render
+  context, draws, flushes and tears down. Hand-building that context reproduces the icon for flat
+  items but leaves a transparent notch in block cubes, and depth-state experiments (disabling the
+  depth test, clearing the depth buffer, mask juggling) only move the artefact around. If a feature
+  has one obvious owner function, call it.
+- **Item icons: two classic crashes and one artefact.** An empty stack handed to the renderer
+  crashes the game (validate stack object, item holder and valid flag first). A new stack instance
+  every frame replays the "new item" bounce animation (cache per item id). A hand-built render
+  context produces the cube notch above. Symptom -> cause, in one line each.
+- **Class names are not identity.** Many mobs share a base-class RTTI name, so name keys derived
+  from the class name are wrong yet plausible (and sometimes even resolve). Use the engine's own
+  identity data: actor -> definition identifier -> canonical identifier string -> localized name
+  through the game's translation table. Treat a translation equal to the key as "missing" and fall
+  back; cache per actor.
+- **"Do everything" engine helpers can be untouchable from a mod.** A single function that goes
+  identifier -> key -> localized string looks perfect, but its out parameter can be a cache record
+  larger than a string and it can take an options struct with hidden state; calling it with plain
+  buffers crashed. Read its callers for sizes and offsets, then prefer composing verified
+  primitives.
+- **Addon blocks carry a namespace in their description id.** Keep it; forcing the vanilla
+  namespace breaks the id. For display, the inventory item name is the reliable source (same name,
+  same language), with the identifier tail as the last resort - never feed an empty stack to the
+  renderer.
+- **Config: load before registering the menu.** The mod builds with unwind tables disabled, so any
+  throwing call (filesystem, string-to-number) can terminate the process. Use C-level file IO,
+  atomic write (temp + rename), and capture the config directory from the lifecycle callback.
+- **Overlay crash-safety gates.** Player ticks begin while the world is still loading: gate on a
+  fresh tick, a valid block source, a short settle after the first tick, and a probe of the block
+  under the player (air/placeholder means "not ready"). Guard heights before block lookups (the
+  block source asserts out of range, and a stale crosshair result can carry a bad position).
+  Hooks stay fail-open.
+- **Reading engine memory needs its own guard rails.** The process-map snapshot goes stale within
+  seconds (refresh it in the background), pointers may carry a tag in their top bits (normalize
+  before comparing addresses even though dereferencing works), and the guard must cover the whole
+  accessed window, not its first address - a pointed-to window crossing a mapping boundary is a
+  reliable crash.
+- **No I/O on the render thread.** Diagnostics go into a small snapshot; a background thread writes
+  the file. Log the build banner, signature resolution results and one line per target change;
+  remove the file log for release.
+- **A render-path fix needs evidence.** Acceptable: unique signature verification, caller
+  disassembly that shows argument types, a decompiled body, a runtime log line showing the first
+  wrong value, or an A/B test where only the suspected code changed. Otherwise it is a hypothesis:
+  change one variable, test, and keep a known-good backup plus a failed-attempt backup.
+
 ### 1.26.60 layout shifts
 
 - **A base-class growth moves every derived field.** Confirm one offset from the game's own
@@ -291,3 +371,25 @@ carrying in your head, because each one cost a separate debugging round:
 - Use `rtti_vtables.py` (relocation image + RTTI vtables) and `align_vtables.py` (slot
   alignment) before guessing at vtable layout; file-level pointer scans do not work because
   `.data.rel.ro` is zero-filled and filled in by `.rela.dyn` at load time.
+
+## Coexistence and crash safety (panel mod + a third-party map mod)
+
+* "My feature disappears when mod X is installed" is usually the **signature layer**, not the hook
+  layer: the preloader's `hook()` is a chain manager, so two mods on one target is supported. Prove
+  it with a detour call heartbeat plus a per-pattern resolution log.
+* An SDK RTTI/vtable helper can return 0 for **every** class after a launcher update. Anything on
+  the critical path (font capture, draw context, identifiers) must have a fallback that does not
+  depend on it, and its result must be logged per class once.
+* Never hand an address you have not verified to `pl::memory::hook()`. A detour argument that
+  *should* be the render context can be junk when a competing detour forwards only `x0`; reading its
+  first word as a "vtable" and hooking it patches non-code memory and kills the process instantly.
+  Identify objects by a fixed vtable address point, and check the target is inside the game image.
+* A cached `/proc/self/maps` snapshot goes stale: refresh on a miss (rate limited). Objects created
+  when a world loads can live in mappings that did not exist when the snapshot was taken, and a
+  stale "unreadable" verdict silently disables the whole feature (worst kind of bug: no crash, no
+  draw, no log).
+* Installing hooks late is itself a crash risk: with per-pattern scanning, ~30 patterns cost ~20 s,
+  so the hooks were patched while the menu was already drawing through those functions. Resolve
+  everything in one pass (or from a byte-verified vaddr table) and install immediately.
+* Keep the tested binary, ship the cleaned one only after re-testing, and never ship the diagnostic
+  logging. Post-mortem: `references/coexistence-and-crash-safety.md`.

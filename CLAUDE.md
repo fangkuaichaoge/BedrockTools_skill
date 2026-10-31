@@ -12,6 +12,45 @@ or patches, compile an arm64 `.so`, and verify it.
 
 ## 0. Rules
 
+### Iron rules (apply to every task, in every session)
+
+1. **When a decision is uncertain, ask the user first — before building.**
+   State the choice, the trade-off and what you would do by default, and ask
+   for their preference, any advice, and whether they have supplementary
+   material (a reference mod, a decompile, a screenshot, a spec). One short
+   question costs seconds; guessing costs a build, a device test and a
+   rollback. This applies to scope ("should this also cover X?"), to semantics
+   ("does ✗ mean slow, or cannot harvest?"), and to mechanism ("engine renderer
+   or my own draw call?"). Do not ask about things the evidence already
+   settles — read the evidence first, then ask what is genuinely open.
+2. **Before hunting evidence, work out what the feature relates to.**
+   Reverse engineering starts from the feature, not from a search: name the
+   subsystem that owns the behavior (which screen, which renderer, which item
+   or block class, which asset family), then find the engine function that
+   already implements it and read *that*. Confirm the path exists — data path,
+   render path, input path — before writing UI on top of it. A feature whose
+   underlying path does not exist in this engine cannot be built by trying
+   harder, and finding that out early is the whole point of this rule.
+3. **When the user says they have a tool, skill or reference, use it.**
+   If they name a prepared script, skill, dump, IDA session, reference project
+   or document, that is the intended input: load and use it instead of
+   re-deriving the same thing from scratch. Their prepared material outranks
+   your own shortcut. If it turns out to be unusable, say so with the concrete
+   reason and ask — do not silently substitute your own approach.
+
+4. **A crash is worse than a missing feature, and nothing unverified may reach a hook.**
+   Before any engine address is hooked or called, prove it is *code inside the game image* (module
+   check from the linker's own program headers, plus a byte check against the signature). Identify
+   objects by a fixed vtable address point before reading their slots or calling their methods -
+   never by "the second argument should be ...". Guard every dereference with a readable-map check
+   whose snapshot refreshes on a miss. When in doubt, do not draw and do not call: fail open.
+   Change one variable per build; a two-change "fix" cannot be attributed. The full invariant
+   checklist and the coexistence decision tree live in
+   `skills/references/coexistence-and-crash-safety.md` - read it before touching hook
+   installation, pointer validation, or anything a second mod also touches.
+
+### Working rules
+
 - **Method source**: use `BedrockTools-main` (the BedrockTools source tree).
   Its code is the reference for every hook/patch/signature pattern. Other mod
   projects in the workspace may be used only as build-environment references,
@@ -70,6 +109,7 @@ or patches, compile an arm64 `.so`, and verify it.
 | `skills/references/feature-workflow.md` | feature -> function -> feasibility -> hook decision |
 | `skills/references/hook-techniques.md` | full hook technique reference |
 | `skills/references/hook-engineering.md` | hook judgement and safety: mechanism choice, site choice, lifecycle, fail-open rules, proving liveness, coexistence, failure modes |
+| `skills/references/coexistence-and-crash-safety.md` | coexistence with another hooking mod + crash-safety invariants: the three layers a conflict can live on, the decision tree for "my feature disappeared", the unverified-hook-target crash, the invariant checklist, deep-anchored signatures, ELF vaddr tables when the SDK RTTI resolver returns 0 |
 | `skills/references/mod-lifecycle-and-crash-safety.md` | startup timing and crash safety: preloader load order, why not to hook `dlopen`, poll-then-settle attach, diagnosing "the launcher dies and asks me to re-import", stale-config repair |
 | `skills/references/signature-forensics.md` | finding a function and proving it is usable: anchors, pattern design, evidence ladder, ABI/thread/re-entrancy checks, ship checklist |
 | `skills/references/so-analysis.md` | direct `.so` analysis (ELF/sections/symbols/strings/signatures) |

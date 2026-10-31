@@ -121,3 +121,22 @@ Do steps 2-4 in that order; skipping to 4 is how a wrong-site hook becomes a
   so a failed injection cannot change anything.
 * Keep a known-good build to hand and be ready to remove the hook entirely -
   see `feature-rollback.md`.
+
+## Crash-safety invariants and coexistence (must-read)
+
+The failure that costs the most device rounds is not a bad hook site, it is an **unverified
+address** reaching `pl::memory::hook()` or an unverified object being treated as the draw context.
+The companion file `coexistence-and-crash-safety.md` holds the invariant table (hook target must be
+code inside the game image, object identity by fixed vtable address point, readable-map check before
+every dereference, fail-open as the only acceptable failure mode), the three layers where a second
+mod can actually collide, and the decision tree for "the feature disappeared after installing mod
+X". Read it before touching hook installation or pointer validation.
+
+Two rules worth repeating here because they are hook-engineering rules:
+
+* **A detour that is never called and a detour that is called with junk arguments are different
+  bugs.** A throttled call heartbeat in the detour distinguishes them with one device log; guessing
+  from symptoms wastes rounds.
+* **Never derive a hook target from an argument you have not identified.** If a competing detour on
+  the same chain forwards only `x0`, every later argument can be garbage - including one that looks
+  like a vtable pointer.

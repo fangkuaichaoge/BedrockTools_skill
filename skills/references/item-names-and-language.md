@@ -107,6 +107,16 @@ Practical rules:
 3. A chest with a renamed item shows the custom name.
 4. Unknown language / unreadable localization → still renders, in English, without errors.
 
+## Entity names are identity-based, not class-based
+
+Item names come from the stack, entity names do not: many mobs share a base-class RTTI name, so a
+name derived from the class name is wrong (and sometimes even translates, which is worse). Go
+through the engine's identity data - the actor's definition identifier, then its canonical
+identifier string - and let the game translate the key built from it. Try both the vanilla short
+form and the namespaced form, treat a translation equal to the key as missing, and cache per actor.
+If a single engine function appears to do the whole chain, check its callers first: its out
+parameter may be a larger cache record and its options struct may have hidden state.
+
 ## Description id and client item identity
 
 Two `Item` virtuals matter for overlays that draw items themselves:

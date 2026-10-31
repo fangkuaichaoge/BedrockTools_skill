@@ -421,3 +421,28 @@ Ship `verified` freely. Ship a `lead` only behind an observe-only mode, and say
 so. Never let a pattern's uniqueness stand in for its identity: those are two
 different questions, and a signature tool can only answer the second.
 
+## Coexistence: another mod's inline hook rewrites the prologue
+
+When a second mod inline-hooks the same function, the bytes your pattern anchored on are gone and
+`resolveSignature()` returns 0 - with no error. The fix is a **deep-anchored** pattern: wildcard the
+leading `K` bytes (`K` >= the largest plausible prologue patch; 128 is comfortably safe), anchor the
+constrained bytes in the function body at head + `K`, and keep the original pattern as the primary.
+`resolveSignature` returns `hit - firstConstrainedByte`, which is the function head again, so the
+wildcard prefix costs nothing.
+
+Verify offline on a clean image **and** on copies with simulated head patches of 16 / 24 / 32 / 48 /
+96 bytes: the pattern must stay UNIQUE and resolve to the same head in every case. Literal body
+bytes are legitimate pattern data only if `.text` has no dynamic relocations - confirm once per
+build by parsing `.rela.dyn` and checking no `r_offset` falls inside `.text`.
+
+## When the runtime's RTTI resolver returns 0: a vaddr table from the ELF
+
+If `resolveVtableFunction()` returns 0 for *every* class on a launcher build (log each one before
+concluding), the entry points can be read straight out of the image instead: from the typeinfo name
+string -> the typeinfo object -> the vtable whose `[-1]` slot is that typeinfo and `[-2]` is zero;
+the **address point** (`vtable + 16`) is exactly the value stored in objects, so it doubles as the
+identity test, and slot `n` is the word at `addressPoint + 8n`. Take the module base from the
+linker's program headers (`dl_iterate_phdr`), not from a signature. Verify each baked address
+against the pattern's bytes - prologue first, then the deep-anchored body - before calling it, and
+keep a single-pass scanner (Aho-Corasick over the anchors) as the fallback for other builds.
+Details and the full checklist: `coexistence-and-crash-safety.md`.

@@ -69,6 +69,16 @@ Two rules that matter:
 * **Draw images/cells first, then icons, then text.** Icons are submitted through a different
   path than rectangles; interleaving them in the wrong order makes text disappear behind icons.
 
+### Prefer the engine's GUI icon helper
+
+The recipe above works for flat items, but the engine usually wraps the item renderer in a helper
+that prepares the stack, builds and tears down the render context and flushes the item render list.
+That helper is what the inventory uses. Hand-building the context leaves a visible notch in block
+cubes, and depth-state experiments only move the artefact around. Find the wrapper by asking who
+calls `renderGuiItemNew`: if the caller set is a single function, that function is the public entry
+point - call it and let the game do the setup. Cached stacks also matter: a freshly constructed
+stack every frame replays the "new item" animation.
+
 ## 4. Text: measuring before drawing
 
 `uiGetLineLength(context, font, text)` is the measuring call; `drawText` takes a rectangle

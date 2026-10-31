@@ -26,6 +26,50 @@ packaged `.levipack`. Do not scatter files into the workspace root, into an
 unrelated mod's folder, or into the `skills/` tree. Reuse an existing folder
 only when continuing that same task.
 
+## Non-negotiable rules (learned the hard way)
+
+These are not style preferences; each one comes from a build that crashed or a "fix" that
+silently did nothing.
+
+1. **A fix needs evidence.** Acceptable evidence: a UNIQUE signature verification, caller
+   disassembly showing the argument setup, a decompiled body, a runtime log line that shows the
+   first wrong value, or an A/B test where only the suspected code changed. If you have none of
+   these, you have a hypothesis: label it, change exactly one variable, and test. Never stack two
+   speculative changes into one build -- you lose the ability to bisect.
+2. **Never guess an ABI.** Recover the signature from the callers: which register holds what,
+   whether the return comes back through the dedicated return register (sret), how large the
+   out-struct is (stack frames, table strides, pointer arithmetic in the caller). A composite
+   engine function whose out-struct you have not mapped must not be called from a mod; replicate
+   the chain from verified primitives or find another entry point.
+3. **Assume the render path is hostile.** No exceptions (the mod is built with unwind tables
+   disabled, so a throwing call terminates the process), no file I/O on the render thread, no
+   speculative graphics-state changes. If an artefact appears, first find how the vanilla engine
+   draws the same element and call that code path.
+4. **Every pointer read needs a guard.** A process-map snapshot goes stale; refresh it. Pointers
+   may carry a tag in their top bits: normalize before comparing addresses. Guard whole
+   `memcpy`/string windows, not just their first address. An unguarded read during a scan is a
+   crash waiting for the wrong mapping.
+5. **Fail open.** Hooks call the original first and never drop a call. A feature that cannot be
+   computed must render nothing, not fall back to garbage memory.
+6. **Ship in one-change steps with backups.** Before a risky change, copy the mod folder to
+   `<mod> - backup-<version>-<what>-<timestamp>`; for a release,
+   `<mod> - release-<version>-<timestamp>` with sources, analysis, dist and docs. Bump the
+   manifest version every build and keep the version in the debug log banner.
+7. **Record the failures.** For every version, write down what was tried and *why it was wrong*
+   (see `references/lessons-learned.md`). The failure notes are what save the next session.
+8. **A crash outranks a missing feature, always.** Nothing unverified may reach a hook or an
+   engine call: prove a hook target is *code inside the game image* (module check plus a byte
+   check), identify objects by a fixed vtable address point before using their slots or methods,
+   and guard every dereference with a readable-map check whose snapshot can refresh. When in
+   doubt, draw nothing. One change per build. Full checklist:
+   `references/coexistence-and-crash-safety.md`.
+9. **Work out *which layer* a conflict lives on before touching code.** Another mod can collide at
+   the hook layer (chain manager - usually fine), the signature layer (its inline hook rewrites the
+   prologue, so your patterns stop matching and your detour is silently never installed), the
+   RTTI/vtable layer (an SDK helper returning 0 on a different launcher build), or the render
+   queue. Decide the layer from a device log. Read `references/coexistence-and-crash-safety.md`
+   before "fixing" a coexistence bug.
+
 ## Tool selection — read this before analyzing anything
 
 A Bedrock `.so` is hundreds of megabytes. **Do not start a disassembler's
@@ -462,6 +506,7 @@ subscribe through the runtime ABI with `RuntimeListener<Event>`.
   grep + shipped-binary strings + size), preserving the surviving path,
   renaming a shipped deliverable at every layer, and recording why a feature
   was removed.
+- `references/coexistence-and-crash-safety.md` — **coexistence with another hooking mod and crash-safety invariants**: the three layers a conflict can live on, the decision tree for "my feature disappeared", the unverified-hook-target crash, the invariant checklist, deep-anchored signatures, ELF vaddr tables when the SDK RTTI resolver returns 0, and post-mortem discipline.
 - `references/lessons-learned.md` — distilled experience: why forcing
   upstream gates fails, fixing at the drop site, reversing working
   references, and debugging process. Read it whenever a GUI item icon is
