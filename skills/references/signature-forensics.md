@@ -421,6 +421,8 @@ Ship `verified` freely. Ship a `lead` only behind an observe-only mode, and say
 so. Never let a pattern's uniqueness stand in for its identity: those are two
 different questions, and a signature tool can only answer the second.
 
+
+
 ## Coexistence: another mod's inline hook rewrites the prologue
 
 When a second mod inline-hooks the same function, the bytes your pattern anchored on are gone and

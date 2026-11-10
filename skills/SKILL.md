@@ -1,6 +1,6 @@
 ---
 name: bedrock-pe-modding
-description: "Develop native mods and hooks for Minecraft Bedrock (PE) Android arm64 by following the exact techniques used in the open-source BedrockTools project. Use when the user wants to: hook, patch, or mod libminecraftpe.so; write a LeviLauncher / preloader native mod (.so); turn a desired feature into concrete game-function hooks; decide between inline hooks, vtable hooks, and direct byte patches; extract or verify ARM64 byte signatures; build an arm64-v8a Android .so with NDK + CMake or xmake; package a mod (manifest.json / .levipack); port a mod to a new Bedrock version; or understand Bedrock PE internals such as tick, render, FOV, packet, attack, screen, weather, time, skin, and UI hooks. Not for Java/Spigot/Forge mods or for non-Bedrock ELF targets without adaptation."
+description: "Develop native mods and hooks for Minecraft Bedrock (PE) Android arm64 by following the exact techniques used in the open-source BedrockTools project. Use when the user wants to: hook, patch, or mod libminecraftpe.so; write a LeviLauncher / preloader native mod (.so); turn a desired feature into concrete game-function hooks; decide between inline hooks, vtable hooks, and direct byte patches; extract or verify ARM64 byte signatures; build an arm64-v8a Android .so with NDK + CMake or xmake; package a mod (manifest.json / .levipack); port a mod to a new Bedrock version or make it run on unlisted builds (runtime address resolution); follow the end-to-end mod workflow (feature, bug, crash, version, release, hand-over to the user for testing); or understand Bedrock PE internals such as tick, render, FOV, packet, attack, screen, weather, time, skin, and UI hooks. Not for Java/Spigot/Forge mods or for non-Bedrock ELF targets without adaptation."
 ---
 
 # Bedrock PE Native Modding (BedrockTools patterns)
@@ -16,6 +16,17 @@ Everything below is deliberately **machine-agnostic**: replace
 `<libminecraftpe.so>`, `<NDK>`, `<your-mod-dir>` with real paths on the
 machine you are on. The code examples follow BedrockTools' code exactly; do
 not invent new abstractions.
+
+## Start here — the workflow
+
+Read `references/workflow-playbook.md` at the start of every mod session. It classifies the
+request (feature, bug, crash, version, coexistence, rollback, checkpoint), gives the track for
+each, says when to stop verifying and hand the user a package, how to read the user's reactions,
+and the report format. The rest of this skill is the detail behind those tracks.
+
+For "the mod does not work on game version N": check the build gate first, then
+`references/runtime-build-resolution.md` (supporting builds you do not have) or
+`references/porting-a-live-mod.md` (adding a build you do have).
 
 ## Workspace layout — one task, one folder
 
@@ -58,17 +69,48 @@ silently did nothing.
 7. **Record the failures.** For every version, write down what was tried and *why it was wrong*
    (see `references/lessons-learned.md`). The failure notes are what save the next session.
 8. **A crash outranks a missing feature, always.** Nothing unverified may reach a hook or an
-   engine call: prove a hook target is *code inside the game image* (module check plus a byte
-   check), identify objects by a fixed vtable address point before using their slots or methods,
-   and guard every dereference with a readable-map check whose snapshot can refresh. When in
-   doubt, draw nothing. One change per build. Full checklist:
+   engine call: every hook target must be proven to be *code inside the game image* (module check
+   plus byte check), every object must be identified by a fixed vtable address point before its
+   slots or methods are used, and every dereference must follow a readable-map check whose snapshot
+   can refresh. When in doubt, draw nothing. A "fix" that changes two things at once is not a fix —
+   it costs the ability to attribute the result. Full checklist:
    `references/coexistence-and-crash-safety.md`.
 9. **Work out *which layer* a conflict lives on before touching code.** Another mod can collide at
-   the hook layer (chain manager - usually fine), the signature layer (its inline hook rewrites the
-   prologue, so your patterns stop matching and your detour is silently never installed), the
-   RTTI/vtable layer (an SDK helper returning 0 on a different launcher build), or the render
-   queue. Decide the layer from a device log. Read `references/coexistence-and-crash-safety.md`
-   before "fixing" a coexistence bug.
+   the hook layer (chain manager — usually fine), the signature layer (its inline hook rewrites the
+   prologue → your patterns stop matching → your detour is silently never installed), the
+   RTTI/vtable layer (an SDK helper that returns 0 on a different launcher build), or the render
+   queue. Decide the layer from a device log, then fix that layer. Read
+   `references/coexistence-and-crash-safety.md` before "fixing" a coexistence bug.
+10. **Count before you change.** When static reasoning has produced two "plausible fixes" that did
+    not help, stop guessing. Ship one observe-only build that writes a small status file
+    (detour call counters, a counter per early-return gate, each hook's install result plus the
+    target's *live* head bytes, the loaded-library list) and have the user run it with and
+    without the other mod. The diff of the two files names the broken layer directly.
+11. **A fallback that has never run is broken until proven otherwise.** Exercise every fallback by
+    simulating the failure it exists for (overwrite 4/16/20/24/64 head bytes, then re-run the
+    exact check), and verify offline with a *replica of the shipped parser/matcher*, not a
+    lookalike. Multi-line byte-pattern literals need an explicit separator at every join, or the
+    compiler glues two tokens into one malformed token and the whole pattern fails to parse.
+12. **A key scheme that works for some keys and not others is the wrong key scheme.** Registries
+    are often keyed by a registration id, not a name hash. Read the static initializer, build
+    any runtime lookup table from the engine's own registry, and trust the table only when it
+    reproduces one value known independently. Check every name you will look up against the
+    binary's string table before the first build.
+13. **Know which copy and which side you are reading.** In a local world the client and the
+    integrated server each own an object copy. Before writing UI, read what the class sends to
+    the client (its update-packet method). Show only data that is really there and hide the line
+    otherwise; never show a default as if it were real.
+14. **"Doesn't work on version N" is a gate question before it is a code question.** If the mod
+    whitelists build-ids, an unknown build installs nothing on purpose. Check that first. To
+    support builds you do not have, resolve addresses at start (RTTI vtables, decoded reference
+    sites, signatures) and take the layout from the one known build whose code matches strictly.
+    If zero or two profiles match, install nothing. Prove it on a holdout build that is not in the
+    table. See `references/runtime-build-resolution.md`.
+15. **Offer the package when the remaining gap is device-only.** Once the build compiles, the
+    package hash matches, and every new address has evidence, ask whether the user wants to test
+    it now instead of starting a long verification detour. If the user asks "what are you doing?",
+    drop the tangent. If they decline to send an artifact, do not ask again until a test fails.
+    See `references/workflow-playbook.md` §9.
 
 ## Tool selection — read this before analyzing anything
 
@@ -201,6 +243,7 @@ behavior the user wants to change?* BedrockTools maps features to functions:
 | Frame / render-loop logic | `eglSwapBuffers` (libEGL.so) | inline hook on exported symbol |
 | Visual effect on existing geometry (outline / tint / glow / depth tricks) | none — the graphics-API boundary itself | shader-source injection + two-pass draw, no signatures (see `references/render-pipeline-hooks.md`) |
 | Screen open/close detection | `ContainerScreenControllerOpen/Dtor`, `ChatScreenOpen/Dtor` | inline hook + event |
+| Custom on-screen button / panel gated by game state | `MinecraftUIRenderContext` finish (slot 31) + container screen open/dtor | hook finish, draw with the context's own primitives (see `references/engine-ui-buttons-and-overlays.md`) |
 | Hit result / reach | `LevelGetHitResult`, `HitResultGetEntity` | resolve + call as function |
 | Player name / skin | `ActorGetNameTag`, `ActorSetNameTag` + `offsets::Player::mName/mSkin` | inline hook / field access |
 | Weather / biome | `WeatherTick`, `WeatherIsRaining`, `BiomeGetTemperature` | inline hook or field access via `offsets::Weather` |
@@ -332,6 +375,18 @@ subscribe through the runtime ABI with `RuntimeListener<Event>`.
 
 ## References (load on demand)
 
+- `references/workflow-playbook.md` — **read first**: the session loop (classify → evidence →
+  one change → build → package → hand over → checkpoint), one track per request type (feature,
+  bug, crash, version, coexistence, rollback, checkpoint), when to stop verifying and offer the
+  user the package, a table of user signals and what to do about each, the hand-over report
+  format, release mechanics, and anti-patterns from real sessions.
+- `references/runtime-build-resolution.md` — **running on game builds you do not have**: telling a
+  build-gate no-op from a code change, scannable vs non-scannable facts, vtables by RTTI (exactly
+  one address point), globals by strictly decoded `ADRP`+`ADD/LDR` reference sites (two that must
+  agree), functions by signature or vtable slot, choosing the layout profile by a strict
+  displacement-preserving code probe (exactly one profile or nothing), cross-checks, proving it on
+  a holdout build, generator and replay rules, and what to tell the user.
+
 - `HOOK_TUTORIAL.md` (workspace root) — full user-facing tutorial: feature ->
   game function -> locate -> verify -> hook -> compile -> package -> deploy.
 - `references/feature-workflow.md` — feature -> function -> feasibility ->
@@ -457,6 +512,23 @@ subscribe through the runtime ABI with `RuntimeListener<Event>`.
   from the engine's own queue), the pinned-`adrp` signature trap, differential
   old-build testing, the diagnostic-log decision tree, the release checklist and
   a pitfalls list. Read it before any "port this mod to version X" task.
+- `references/engine-ui-buttons-and-overlays.md` — **on-screen buttons and overlays drawn with
+  Minecraft's own UI**: choosing between the launcher HUD button, launcher draw commands and the
+  engine UI layer; the `MinecraftUIRenderContext` finish/draw-text hooks (slots 31/6) and the
+  fill/text/clip primitives (slots 17/6/8/2/28) with their AArch64 ABIs; proving each slot by
+  disassembly and cross-checking against byte signatures; UI-unit geometry and screen-size
+  anchoring; container-screen gating (shared `ScreenController::open` slot 7 + destructor slot 0,
+  and the screens that override `open()`); touch hit-testing (view pixels → UI units); and the
+  fail-open installation checklist. Read it before writing any custom control or panel. §5b/§5c
+  also cover giving the button a **vanilla texture face** (`getTexture`/`drawImage`/`flushImages`,
+  slots 33/9/11) and placing it clear of the container's close button.
+- `references/container-item-moves-and-sorting.md` — **acting on** container contents: the measured
+  semantics of the controller's select (slot 58) and `moveSelectedTo` (slot 56) verbs (one item per
+  call, verified from on-device step logs), why slot 71 and the container size accessor are
+  unusable, refusing screens whose slot layout differs (furnace/campfire split stacks), the
+  single-target-layout + distance-metric planner that converges instead of oscillating, burst
+  pacing that does not desync the local server, per-kind conservation checks, and the
+  capture-and-replay alternative.
 - `references/hud-buttons-and-icon-art.md` — launcher HUD buttons from a native
   mod: what the bridge really validates, the missing active-PNG setter and the
   `ButtonInfo` workaround, toggle event semantics, embedding art as generated
@@ -506,7 +578,29 @@ subscribe through the runtime ABI with `RuntimeListener<Event>`.
   grep + shipped-binary strings + size), preserving the surviving path,
   renaming a shipped deliverable at every layer, and recording why a feature
   was removed.
-- `references/coexistence-and-crash-safety.md` — **coexistence with another hooking mod and crash-safety invariants**: the three layers a conflict can live on, the decision tree for "my feature disappeared", the unverified-hook-target crash, the invariant checklist, deep-anchored signatures, ELF vaddr tables when the SDK RTTI resolver returns 0, and post-mortem discipline.
+- `references/coexistence-and-crash-safety.md` — **coexistence with another hooking
+  mod and crash-safety invariants**: the three layers a conflict can live on (hook chain,
+  signature, RTTI/vtable), the decision tree for "my feature disappeared after installing mod X",
+  the unverified-hook-target crash and how to make it impossible, the invariant checklist, deep-
+  anchored signatures for functions another mod hooks, resolving engine entry points from the ELF
+  when the SDK resolver returns 0, and the post-mortem discipline. Read it before any change that
+  touches hook installation, pointer validation or another mod's territory.
+- `references/field-notes-overlay-mod.md` — **end-to-end field notes from a look-at info
+  overlay (WAILA/Jade style)**, written generically with no function names or addresses: feature
+  → owning subsystem, anchors for locating functions in a stripped binary (RTTI, NBT keys,
+  localization prefixes, the engine's own consumer, static initializers), the evidence ladder,
+  safe data reads (server vs client copy, update packets, the registry-key trap, ECS and synched
+  data), hook-chain behavior, the full coexistence case study (four blind fixes vs one diagnostic
+  build, the never-parsed fallback signature), HUD icons and a live 3D mob in a panel, sizing,
+  localization, parallel analysis with subagents, build discipline and checklists. Read it before
+  building any HUD info feature or debugging "it does not show with mod X".
+- `references/ui-actor-rendering.md` — **rendering a live entity model in a HUD panel**:
+  copying the engine's own UI actor renderers (HUD paper doll, inventory horse) call for call,
+  the preconditions that crash or hang when missed (world settled, HUD on top, actor
+  components), pose and fit, putting the model inside the panel (nine-slice with a hole), the
+  pitfall that the overlay hook runs several times per frame (draw the model once per frame),
+  the wrong theories and why they should have been rejected sooner, debugging without logs.
+  Read it before drawing any 3D model from a HUD hook.
 - `references/lessons-learned.md` — distilled experience: why forcing
   upstream gates fails, fixing at the drop site, reversing working
   references, and debugging process. Read it whenever a GUI item icon is

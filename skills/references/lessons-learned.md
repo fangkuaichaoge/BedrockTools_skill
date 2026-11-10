@@ -3,6 +3,10 @@
 Distilled from real "mod does not work" debugging sessions. These are
 general principles, not version-specific answers.
 
+For a 3D entity model drawn from a HUD hook, read `ui-actor-rendering.md`: the
+overlay hook can run several times per frame, and a theory has to explain the
+cases that work as well as the ones that fail.
+
 For rendering / visual-effect work (outlines, tints, glow, material effects),
 read `render-pipeline-hooks.md` as well — it covers the API-boundary hook
 layer, shader-source injection, GL state hygiene, geometry rules for shell
@@ -372,6 +376,7 @@ carrying in your head, because each one cost a separate debugging round:
   alignment) before guessing at vtable layout; file-level pointer scans do not work because
   `.data.rel.ro` is zero-filled and filled in by `.rela.dyn` at load time.
 
+
 ## Coexistence and crash safety (panel mod + a third-party map mod)
 
 * "My feature disappears when mod X is installed" is usually the **signature layer**, not the hook
@@ -393,3 +398,21 @@ carrying in your head, because each one cost a separate debugging round:
   everything in one pass (or from a byte-verified vaddr table) and install immediately.
 * Keep the tested binary, ship the cleaned one only after re-testing, and never ship the diagnostic
   logging. Post-mortem: `references/coexistence-and-crash-safety.md`.
+
+## Container actions (measured facts)
+
+* `select` (slot 58) records the held stack and commits nothing; `moveSelectedTo` (slot 56) then
+  transfers **exactly one item** per call. A planner written for "move the stack" never converges.
+* Raw `moveItem` (slot 71) is accepted with no effect. An extra "return remainder" call causes
+  `64 -> 63 + 1` splits; the two-call pair already ends with an empty cursor.
+* Container size is not readable from the object (garbage bounds; `ContainerModel` returns 0). Use
+  the engine UI layout: `inventory_items` 27, `hotbar_items` 9, `container_items` 27.
+* Gate on the controller RTTI class name. Furnace/campfire/anvil screens have a handful of slots;
+  addressing indices that do not exist there splits stacks.
+* One target layout + a distance metric converges; separate merge/order passes fight each other.
+  Never donate from a settled slot.
+* Hundreds of transactions in one frame desync the local server and drop the player. 8-12 per
+  60-80 ms is safe.
+* Log per-call slot deltas to a file, not to logcat; strip the logging before release.
+
+See `container-item-moves-and-sorting.md`.

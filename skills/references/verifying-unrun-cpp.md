@@ -126,6 +126,12 @@ Recorded so the next attempt does not burn the same hour.
 * **Fetching a host compiler at runtime.** With no network, `pip install`-style
   solutions fail; check for an existing toolchain (MSVC, LLVM, mingw, WSL) before
   assuming there is none, and then stop - do not spend the budget on workarounds.
+* **MSVC Build Tools without a Windows SDK.** `vcvars64.bat` exists, but every
+  translation unit fails with `C1083` on `stdio.h` because the CRT/UCRT headers live
+  in the SDK. If `Windows Kits\10` has no `Include` directory, there is no host C++
+  compiler; stop there. Compile with the project's cross toolchain, run the Python
+  twin, and replay the generated tables instead. Ask the user whether they want the
+  package for a device test before spending more time.
 * **Assuming `adb` implies a device.** `adb devices` returning an empty list is a
   hard stop for runtime verification; check it early so plans do not depend on it.
 

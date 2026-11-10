@@ -132,6 +132,14 @@ Design:
    48 / 96 bytes: the pattern must stay **UNIQUE** and must resolve to the exact head.
 4. Keep the original pattern as the primary (it is more portable across builds) and the deep one as
    the fallback when the primary returns 0.
+5. **Prove the fallback parses in the shipped code.** A deep pattern is long, so it gets written as
+   several adjacent string literals. Without a separator at each join the compiler glues the
+   last token of one literal to the first of the next (`"?? ??" "?? 00"` → `"?? ???? 00"`), the
+   tokenizer rejects the malformed token, and the *whole* pattern silently fails to parse. The
+   fallback then never works, and nothing shows it until another mod patches the head. Put a
+   space at every join (or make the parser split even-length hex runs), and run the offline
+   check with a replica of the mod's own tokenizer: a forgiving Python parser "proved" a broken
+   fallback correct in a real case.
 
 Literal body bytes are safe as pattern data **if the image's `.text` has no dynamic relocations** —
 verify that once per build: parse `.rela.dyn` and check that no `r_offset` falls inside `.text`.
@@ -170,6 +178,26 @@ path, which is itself a crash-prevention measure (no patching while the engine i
 patched code).
 
 ---
+
+## 5a. Case study: four blind fixes, then one diagnostic build
+
+Symptom: an overlay mod drew nothing when a large utility mod was loaded alongside it.
+
+- Four separate builds, each removing one hazard found by static analysis of both mods, did not
+  fix it: a higher hook priority, no `dlopen` polling, no unconditional startup scan, and strict
+  vtable-slot verification. Each was a real improvement, and none was the cause.
+- One observe-only build then wrote a status file every few seconds: detour call counters, a
+  counter per draw-gate exit, each hook's install result with the target's live head bytes, and
+  the loaded libraries. Two runs, alone and with the other mod, made the diff obvious. Three
+  hooks had resolved to 0, the per-frame player-update counter was 0, and every frame stopped at
+  the "no recent player update" gate. One preloader library was loaded, so the hook chain was
+  shared and fine.
+- The three failed targets were exactly the ones the other mod hooks first. Its prologue patch
+  broke the primary pattern, which was expected; the deep fallback should have taken over but
+  had never parsed (§4 step 5). Fixing the separators fixed coexistence.
+
+Takeaways: after the second plausible fix that changes nothing, switch to counting. Test each
+fallback against the condition it exists for. Verify with the shipped parser.
 
 ## 6. Post-mortem discipline that made this tractable
 

@@ -122,6 +122,7 @@ Do steps 2-4 in that order; skipping to 4 is how a wrong-site hook becomes a
 * Keep a known-good build to hand and be ready to remove the hook entirely -
   see `feature-rollback.md`.
 
+
 ## Crash-safety invariants and coexistence (must-read)
 
 The failure that costs the most device rounds is not a bad hook site, it is an **unverified

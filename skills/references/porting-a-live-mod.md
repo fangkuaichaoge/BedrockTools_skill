@@ -25,6 +25,7 @@ Two different goals need different designs:
 |---|---|---|
 | one `.so` per build | version-locked patterns and constants are acceptable | simplest, but every supported build is a separate artifact |
 | **one `.so` for several builds** | build profile selected at install; old values stay untouched | the old builds keep their proven path; the new build is additive |
+| **also unlisted builds** | runtime address resolution plus strict layout-profile match (`runtime-build-resolution.md`) | hotfixes with an unchanged layout work without their library; a changed layout leaves the mod off |
 
 For the second contract, the rule that keeps the port safe:
 
@@ -119,6 +120,57 @@ auto resolve = [](std::string_view legacy, std::string_view modern) {
 Advantages over version strings or ELF build-id parsing: nothing in the mod parses the image, a
 partially matched pattern cannot select the wrong profile, and an unsupported build fails closed
 (the required signatures do not resolve, so nothing installs).
+
+This gate works for two profiles. With three or more builds, use the build-id table in §3a.
+
+### 3a. Three or more builds: build-id table + per-build value table
+
+When the mod supports several builds that you **have**, a disjoint-signature gate per pair does not
+scale. The design that did:
+
+1. **Gate by GNU build-id.** Read the build-id from the game library's `PT_NOTE` (through
+   `dl_iterate_phdr`, never from a file path) and look it up in a fixed table. The id is exact
+   identity. A version string can be missing, and a filename can lie. An id that is not in the
+   table installs nothing. To also run on builds that are not in the table, add the runtime path
+   in `runtime-build-resolution.md`.
+2. **One value table, one column per build.** Every build-specific number (vtable and data
+   addresses, function addresses, field offsets, slot indices, strides) becomes one declaration
+   with one value per build, for example `PerBuild<T> kX{{<build-A>, <build-B>, <build-C>}}`, read
+   through the detected index. Put **all** of them in one header. A module-local copy is easy to
+   miss on the next port. Never write an `if (build == X)` branch in module code when a per-build
+   value would do. The few real code differences (a function rebuilt in one build) get a separate
+   signature, chosen by the same index.
+3. **Generate the signatures from all builds at once.** A generator reads the function in every
+   build and keeps a byte only when it is equal in all of them. It then requires exactly one hit,
+   at the function, in each build. Add a second `*Deep` pattern for the body (from about +128), so
+   that another mod's prologue hook does not hide the function. When the function was rebuilt in
+   one build, emit a separate `*Alt` pattern for the other builds.
+4. **Check the known address first, then scan.** At install time, test the signature at
+   `base + kX` (the per-build address) before falling back to a full scan. This is fast, and the
+   bytes still prove the address.
+5. **One verifier for the whole matrix.** One script checks, on every library:
+   - every vtable address point against its RTTI name;
+   - every slot the code uses against the expected function;
+   - every function address against its signature;
+   - every field offset against an instruction that uses it.
+
+   Run it before every release. A port is done when the verifier is clean, not when it builds.
+
+What moved between neighbouring builds in practice (shapes, not values):
+
+* a whole base class grew, so **every** derived-class field moved by the same delta (check one
+  getter per class, then verify the rest with the displacement census);
+* a virtual was **inserted**, so every later slot moved by one (map with `vtable_slot_map.py`, and
+  confirm each slot's meaning, not just its count);
+* a virtual that exists only in the newest build (its slot and address are 0 elsewhere, and the
+  hook that uses it is not installed there);
+* a function rebuilt in one build (it needs its own pattern; the byte-intersection pattern does not
+  match it);
+* a record stride changed (an array of effects or entries: read the `madd`/`lsl` in the loop);
+* a copy-guard or small inline struct changed size (it shows in the caller's stack frame).
+
+Every one of these was found by the matrix verifier or by a single device report, not by reading
+release notes.
 
 ### Identity is not uniqueness
 
@@ -406,7 +458,12 @@ paths in the packaged `.so`; only functional file I/O remains.
 ## 9. Pitfalls, in one list
 
 * A unique pattern is not an identity: decompile and anchor it.
-* Don't gate the profile on a version string or on filename; use a disjoint behaviour pattern.
+* Don't gate the profile on a version string or on filename. Use the GNU build-id (exact) or a
+  disjoint behaviour pattern. A build-id gate turns every unknown hotfix into "the mod shows
+  nothing": add runtime resolution (`runtime-build-resolution.md`), or tell the user up front
+  which builds are covered.
+* Keep every per-build value in one header. A module-local table is the one the next port misses.
+* A build that is "only a hotfix" still moves every address. Diagnose the gate before the code.
 * Don't edit the legacy constants "to make them correct for all builds" — select per profile.
 * Don't hard-code a wrapper field the mod could read through the getter function.
 * A slot-count change means an **insertion**; map and confirm semantics, do not rename by guess.

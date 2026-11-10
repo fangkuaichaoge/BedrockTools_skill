@@ -30,6 +30,9 @@ changes the whole approach:
   precise, version-locked signatures.
 - **One `.so` for several builds** — every pattern must resolve to exactly one
   hit in *all* of them, and every hard-coded offset must hold in all of them.
+- **Also builds you do not have** (hotfixes, a version the user runs but cannot
+  send) — resolve addresses at start and take the layout from the one known build
+  whose code matches. See `runtime-build-resolution.md`.
 
 Everything below assumes the second, which is the harder and more common goal.
 
