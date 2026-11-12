@@ -26,9 +26,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from rtti_vtables import Library  # noqa: E402
 
-OBJDUMP_CANDIDATES = [
-    Path(r"C:\Users\29633\AppData\Local\Android\Sdk\ndk\29.0.14206865\toolchains\llvm\prebuilt\windows-x86_64\bin\llvm-objdump.exe"),
-]
+from objdump_locator import OBJDUMP_CANDIDATES  # noqa: E402  (portable lookup)
 WINDOW = 0x100
 MAX_INSTRUCTIONS = 64
 
@@ -37,10 +35,8 @@ NUMBER_RE = re.compile(r"0x[0-9a-f]+")
 
 
 def objdump() -> str:
-    for candidate in OBJDUMP_CANDIDATES:
-        if candidate.exists():
-            return str(candidate)
-    raise SystemExit("llvm-objdump not found; edit OBJDUMP_CANDIDATES")
+    from objdump_locator import find_objdump
+    return find_objdump()
 
 
 def tokens(so: Path, address: int) -> list[str]:

@@ -14,20 +14,24 @@ import subprocess
 import sys
 from pathlib import Path
 
-ROOT = Path(r"D:\29633\Downloads\libminecraftpe2640")
-OBJDUMP = Path(r"C:\Users\29633\AppData\Local\Android\Sdk\ndk\29.0.14206865\toolchains\llvm\prebuilt\windows-x86_64\bin\llvm-objdump.exe")
+from objdump_locator import find_objdump  # noqa: E402
+
+ROOT = Path(__file__).resolve().parent.parent  # repo root by default
+OBJDUMP = Path(find_objdump())
 LINE_RE = re.compile(r"^\s*([0-9a-f]+):\s+([0-9a-f]{8})\s+(.+)$")
 
+# Map a label to each .so you want to compare. Labels are arbitrary;
+# add or remove entries freely.
 BUILDS = {
-    "2644": ROOT / "libminecraftpe2644.so",
-    "2650": ROOT / "libminecraftpe2650.so",
-    "2660" : ROOT / "libminecraftpe2660.so",
+    "old": ROOT / "libminecraftpe-old.so",
+    "new": ROOT / "libminecraftpe-new.so",
 }
 
-# function -> per-build address (verified)
+# function name -> {build label: vaddr}.
+# Fill these in from your own resolution step (signature scan, vtable walk, or
+# a disassembler) -- they are build-specific by definition and cannot be shipped.
 FUNCTIONS = {
-    "SetupCamera": {"2644": 0xae38dd8, "2650": 0xb2ac3d4, "2660": 0xb7cf720},
-    "SetupFogPlayer": {"2644": 0xae2829c, "2650": 0xb29b5c0, "2660": 0xb7bf714},
+    "ExampleFunction": {"old": 0x0000000, "new": 0x0000000},
 }
 
 

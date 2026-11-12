@@ -1,4 +1,4 @@
-# bedrock-pe-modding
+﻿# bedrock-pe-modding
 
 **Minecraft Bedrock (PE) native modding skill + hooking tutorial**, distilled
 from the open-source [BedrockTools](https://github.com/QYCottage/BedrockTools)
@@ -44,8 +44,8 @@ bedrock-pe-modding/
 │   └── workflows/ci.yml             # syntax + frontmatter + CLI smoke test
 └── skills/                          # the installable skill directory
     ├── SKILL.md                     # entry point: architecture, API table, workflow
-    ├── references/                  # 21 deep-dive notes, loaded on demand
-    ├── scripts/                     # 16 offline tools
+    ├── references/                  # 36 deep-dive notes, loaded on demand
+    ├── scripts/                     # 25 offline tools
     └── assets/
         └── hud-button-templates/    # 14 PNG button templates (normal + pressed)
 ```
@@ -59,7 +59,7 @@ Two layers, deliberately separate:
   to that directory (`references/…`, `scripts/…`), so the folder works wherever
   it is installed — the copy just has to keep the name your agent expects.
 
-### `skills/references/` — 21 notes
+### `skills/references/` — 36 notes
 
 | File | Answers |
 |---|---|
@@ -67,13 +67,15 @@ Two layers, deliberately separate:
 | `hook-techniques.md` | "Which mechanism: inline hook, byte patch, vtable, GOT/PLT, library boundary?" |
 | `hook-engineering.md` | "Is this hook site safe, and how do I prove it is alive?" |
 | `mod-lifecycle-and-crash-safety.md` | "Why does the launcher die on world load / ask me to re-import?" |
-| `signature-forensics.md` | "How do I find a function and **prove** it is the right one?" (§10: when nothing names it) |
+| `signature-forensics.md` | "How do I find a function and **prove** it is the right one?" (搂10: when nothing names it) |
 | `targeted-static-analysis.md` | "How do I answer precise questions about a 300 MB stripped binary in seconds?" |
 | `so-analysis.md` | "What can I learn from the `.so` on disk with no device?" |
 | `version-porting.md` | "How do I support several game builds from one `.so`?" |
 | `porting-a-live-mod.md` | "How do I add a new game build to a mod that already ships?" |
 | `build-deploy.md` | "How do I build an arm64 `.so`, package it, and verify it via logcat?" |
 | `levilauncher-native-mod-guide.md` | "What does the host side contract look like?" (manifest, lifecycle, config, Mod Menu, input) |
+| `ida-workflow.md` | "How do I drive IDA by address (incl. IDA Pro MCP) without wasting an afternoon?" |
+| `embedding-dex-and-java-ui.md` | "How do I run compiled Java/Kotlin (real Android widgets, a Java SDK, `Canvas` drawing) from a native mod?" (javac→d8→`.rodata`, `InMemoryDexClassLoader`, Activity attach, drag, WebView state, `onDraw`) |
 | `ida-workflow.md` | "How do I drive IDA by address (incl. IDA Pro MCP) without wasting an afternoon?" |
 | `rea-and-disassembler-providers.md` | "Which disassembler back-ends exist and how do I drive them?" |
 | `render-pipeline-hooks.md` | "How do I add a visual effect on a closed-source renderer?" |
@@ -85,7 +87,7 @@ Two layers, deliberately separate:
 | `verifying-unrun-cpp.md` | "How do I defend C++ I cannot compile or run here?" |
 | `lessons-learned.md` | distilled debugging experience across the above |
 
-### `skills/scripts/` — 16 tools
+### `skills/scripts/` — 24 tools
 
 | Script | Question it answers | Deps |
 |---|---|---|
@@ -103,6 +105,9 @@ Two layers, deliberately separate:
 | `elf_facts.py` | header / segments / sections / dynsym / version strings of a `.so` | stdlib |
 | `aarch64_enc.py` | encode AArch64 patch instructions (MOV / NOP / RET / BR / FMOV) | stdlib |
 | `package_levipack.py` | package a mod into `.levipack` and re-read it to verify the result | stdlib |
+| `ida_mcp_client.py` | talk to IDA Pro MCP from a shell (unwraps the JSON envelope) | stdlib |
+| `gen_dex_payload.py` | embed a `.dex` in a mod as a C array, rejecting truncated/non-dex input | stdlib |
+| `objdump_locator.py` | find `llvm-objdump` from `LLVM_OBJDUMP` / `PATH` / NDK env vars instead of a hard-coded path | stdlib |
 | `ida_mcp_client.py` | talk to IDA Pro MCP from a shell (unwraps the JSON envelope) | stdlib |
 | `ida_decompile_targets.py` | batch-decompile a list of addresses from inside IDA | IDAPython |
 
@@ -167,8 +172,7 @@ feature -> game function -> locate (BedrockTools signature dictionary first)
 
 The signature verifier scans any `libminecraftpe.so` for the BedrockTools
 dictionary and reports each pattern as `UNIQUE` / `AMBIGUOUS` / `MISSING`. Only
-`UNIQUE` matches are safe to hook. Always run it against **your** binary —
-signatures are version-sensitive:
+`UNIQUE` matches are safe to hook. Always run it against **your** binary — signatures are version-sensitive:
 
 ```bash
 python skills/scripts/verify_signatures.py \

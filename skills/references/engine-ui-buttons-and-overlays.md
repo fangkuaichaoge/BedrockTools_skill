@@ -19,7 +19,7 @@ hook), `container-preview-live-contents-and-icons.md` (item icons / container da
 | **Launcher draw commands** | `pl::modmenu::submitDrawCommands(moduleId, span)` + `pl::input::registerTouchCallback` | yes (full-screen Canvas view above the game) | **yes** — submit an empty span to clear | you hit-test in HUD *physical pixels* | quick overlays that may live outside the game's UI scale |
 | **Engine UI (this document)** | hook `MinecraftUIRenderContext`'s per-frame finish and draw with its own primitives | yes, inside the game's UI pass and in its UI units | yes, decide per frame | you hit-test touch events (see §6) | anything that should look/behave like a game control, or is gated by game state (container open, screen open, …) |
 
-The reference mod (**proven on 1.26.60**) uses **both**: its movable "Items" button is a
+The reference mod (**proven on device**) uses **both**: its movable "Items" button is a
 launcher HUD button (`registerButton`, id `<mod>_open`, click delivered through
 `ButtonInfo::onEvent`), while its item browser panel is **engine-side** — there is no
 `submitDrawCommands` anywhere in it. The panel is drawn from the engine UI pass, so it moves and
@@ -149,9 +149,9 @@ void drawButton(void* ctx) {
 
 Publish the computed rect in atomics so the input thread can hit-test it (UI units).
 
-A worked, shipping example of this shape (an 11-unit chest-icon button in the top-right corner of a
-container screen, with a halo, a pressed ring and a status line) is `InventorySortMod/src/modules/
-SortButton.cpp` in this workspace; it is also the reference for §5b.
+A worked, shipping example of this shape is a ~11-unit chest-icon button in the top-right corner
+of a container screen, with a halo, a pressed ring and a status line; the same button is the
+reference for §5b.
 
 ## 5b. Using a vanilla texture as the button face (nicer than a coloured rect)
 
@@ -299,13 +299,9 @@ Adding one extra button the way Minecraft draws its own UI — the order that wo
 
 ## 11. Reference implementations
 
-- `InventoryUiTest/` in this workspace is the minimal working skeleton this document was distilled
-  from (6 source files, ~700 lines): `src/core/Ui.cpp` (finish/drawText hooks + primitives),
-  `src/core/Screen.cpp` (container gating), `src/modules/Button.cpp` (geometry + touch), and
-  `analysis/UI-SLOT-EVIDENCE.md` (slot evidence for 1.26.60).
-- `InventorySortMod/` is the same skeleton grown into a shipping mod: it adds a vanilla chest-texture
-  face (`src/modules/SortButton.cpp`), a screen-class gate (`src/core/Screen.cpp`,
-  `CurrentControllerClass`), and a paced container-action engine
-  (`src/modules/SortExecutor.cpp`, documented in `container-item-moves-and-sorting.md`).
-- The reverse-engineering of a shipping mod that draws a full panel in this layer is in
-  `InventoryUiTest/analysis/JEI-MECHANISM.md`.
+A minimal working skeleton of this layer is about 700 lines across four units: a UI core (the
+finish/drawText hooks plus the primitives), a screen gate (container open/dtor), a button module
+(geometry + touch), and a slot-evidence note recording which slots were proven on which build.
+A shipping mod grows that same skeleton by adding a vanilla-texture button face, a screen-class
+gate (comparing the live controller class), and a paced container-action engine (see
+`container-item-moves-and-sorting.md`).

@@ -244,6 +244,7 @@ behavior the user wants to change?* BedrockTools maps features to functions:
 | Visual effect on existing geometry (outline / tint / glow / depth tricks) | none — the graphics-API boundary itself | shader-source injection + two-pass draw, no signatures (see `references/render-pipeline-hooks.md`) |
 | Screen open/close detection | `ContainerScreenControllerOpen/Dtor`, `ChatScreenOpen/Dtor` | inline hook + event |
 | Custom on-screen button / panel gated by game state | `MinecraftUIRenderContext` finish (slot 31) + container screen open/dtor | hook finish, draw with the context's own primitives (see `references/engine-ui-buttons-and-overlays.md`) |
+| Real Android widgets (text input, browser, a Java SDK, `Canvas` drawing) | **none — no engine address is involved** | embed a dex in the `.so`, load it with `InMemoryDexClassLoader`, attach `View`s to the Activity decor (see `references/embedding-dex-and-java-ui.md`) |
 | Hit result / reach | `LevelGetHitResult`, `HitResultGetEntity` | resolve + call as function |
 | Player name / skin | `ActorGetNameTag`, `ActorSetNameTag` + `offsets::Player::mName/mSkin` | inline hook / field access |
 | Weather / biome | `WeatherTick`, `WeatherIsRaining`, `BiomeGetTemperature` | inline hook or field access via `offsets::Weather` |
@@ -537,6 +538,19 @@ subscribe through the runtime ABI with `RuntimeListener<Event>`.
   The launcher's stock button art (keycap bases + glyph pairs, 512x512 PNG)
   ships in `assets/hud-button-templates/` as the style reference and
   compositing base.
+- `references/embedding-dex-and-java-ui.md` — **compiled Java/Kotlin inside a native mod**: the
+  javac→d8→C-array pipeline (`--min-api 26`, header `file_size` must match, verify the embed with
+  `find(b"dex\n038")`), loading it with `InMemoryDexClassLoader` over a `NewDirectByteBuffer` of
+  the `.rodata` array, obtaining a parent `ClassLoader` (launcher class → `ActivityThread` →
+  `Context.getClassLoader`), caching `jmethodID`s, `ScopedEnv` attach/detach, why documents must
+  cross JNI as `byte[]` and not `NewStringUTF`, attaching a `View`/`WebView` tree to the Activity
+  decor, the **attach-once-is-wrong** watchdog that survives Activity recreation, touch
+  drag/slop/gravity-conversion/clamp rules, the `onPageFinished` gate that a state push needs
+  (and the polling fallback), `View.onDraw` essentials (density scaling, stopping the frame loop
+  when hidden, baseline text, overflow audit), the lifecycle and fail-open rules, the alternatives
+  table, a ship checklist and a symptom→cause table. `scripts/gen_dex_payload.py` performs the
+  embed and rejects truncated/non-dex input. Read it before any mod that needs real Android
+  widgets, a Java SDK, or `Canvas` drawing.
 - `references/render-pipeline-hooks.md` — distilled experience for **visual
   effects on a closed-source renderer**: choosing the hook layer, wrapping
   every API resolution path, defensive shader-source injection, self-reporting
@@ -624,6 +638,12 @@ subscribe through the runtime ABI with `RuntimeListener<Event>`.
   JSON arrives malformed. See `references/ida-workflow.md` §8.
 - `scripts/package_levipack.py` — package a mod into `.levipack` (manifest +
   .so + resources) and verify the result.
+- `scripts/gen_dex_payload.py` — turn a `.dex` into a C++ header
+  (`inline constexpr unsigned char[]` + size) so a native mod can embed it in
+  `.rodata` and hand it to `NewDirectByteBuffer` at runtime. Validates the dex
+  magic and that the header's `file_size` matches the real length, which is the
+  check that catches a truncated embed before it becomes a confusing
+  `ClassNotFoundException`. See `references/embedding-dex-and-java-ui.md`.
 - `scripts/elf_facts.py` — read-only ELF facts (header, segments, sections,
   dynamic symbols, version strings) for a fresh `.so`.
 - `scripts/a64.py` — offline AArch64/ELF helper: `xref` (ADRP+ADD/LDR data

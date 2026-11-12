@@ -1,16 +1,16 @@
 # Coexistence with another hooking mod, and crash-safety invariants
 
 Two hard-won lessons are collected here, because they cost the most device-test rounds of any
-work in this workspace:
+work in a real modding project:
 
 * a feature that "disappears when another mod is installed" is usually **not** a hook conflict;
 * a feature that "works, then crashes" is usually an **address or pointer that was never
   verified** before it was used.
 
-Everything below is distilled from a real case: a HUD-panel mod (`HighlightInfo`) coexisting with a
-third-party map mod (`LeviMap`) on the same game build. Both mods used the same preloader
-`pl::memory::hook` API, hooked the same engine functions, and the panel silently stopped drawing.
-Then two "fixes" in a row crashed the process before the real cause was nailed down.
+Everything below is distilled from a real case: a HUD-panel mod coexisting with a third-party map
+mod on the same game build. Both mods used the same preloader `pl::memory::hook` API, hooked the
+same engine functions, and the panel silently stopped drawing. Then two "fixes" in a row crashed
+the process before the real cause was nailed down.
 
 ---
 
@@ -111,7 +111,7 @@ Two meta-rules:
 
 * **A crash is a bigger bug than a missing feature.** When in doubt, do not draw.
 * **A "fix" that changes two things at once is not a fix.** Change one variable per build, or you
-  cannot attribute the result (this workspace learned it the hard way: two speculative changes in
+  cannot attribute the result (learned the hard way: two speculative changes in
   one build cost an extra device round-trip and left the root cause ambiguous).
 
 ---
@@ -152,7 +152,7 @@ verify that once per build: parse `.rela.dyn` and check that no `r_offset` falls
 Symptom: the RTTI helper returns 0 for **every** class (log all of them; if it is only one class,
 it is a class-name/slot problem, not a runtime problem).
 
-Fallback that has been in production in this workspace:
+Fallback that has been in production:
 
 1. **Module base from the linker**, not from a signature: walk the program headers
    (`dl_iterate_phdr`), find the object whose name contains the game library name, take

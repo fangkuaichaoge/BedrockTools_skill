@@ -30,7 +30,7 @@ When a new version becomes the working one, it replaces the old working checkpoi
 
 That keeps exactly one recoverable good state per project and no intermediate clutter. Never keep two
 "working" checkpoints for the same project "just in case"; if a rollback target is genuinely needed
-for a different game build (for example a 1.26.5x package next to a 1.26.60 package), say so in the
+for a different game build (for example an older patch release next to a newer one), say so in the
 folder name and in the change note.
 
 ## Naming and layout

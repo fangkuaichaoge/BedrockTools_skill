@@ -360,7 +360,7 @@ carrying in your head, because each one cost a separate debugging round:
   wrong value, or an A/B test where only the suspected code changed. Otherwise it is a hypothesis:
   change one variable, test, and keep a known-good backup plus a failed-attempt backup.
 
-### 1.26.60 layout shifts
+### Layout shifts after a game update
 
 - **A base-class growth moves every derived field.** Confirm one offset from the game's own
   disassembly (e.g. Actor::mDimension 0x1C0 -> 0x1E0), then assume sibling fields moved too:

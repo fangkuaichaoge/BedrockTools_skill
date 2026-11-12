@@ -1,4 +1,4 @@
-"""Locate the 1.26.60 counterpart of a function whose fixed-byte signature stopped matching.
+"""Locate the new-build counterpart of a function whose fixed-byte signature stopped matching.
 
 Input: the library of an older build, the function's address in it (found through the project's old
 signature), and the target library. The tool disassembles the old function, converts it into a
@@ -19,18 +19,14 @@ import subprocess
 import sys
 from pathlib import Path
 
-OBJDUMP_CANDIDATES = [
-    Path(r"C:\Users\29633\AppData\Local\Android\Sdk\ndk\29.0.14206865\toolchains\llvm\prebuilt\windows-x86_64\bin\llvm-objdump.exe"),
-]
+from objdump_locator import OBJDUMP_CANDIDATES  # noqa: E402  (portable lookup)
 LINE_RE = re.compile(r"^\s*([0-9a-f]+):\s+([0-9a-f]{8})\s+(.+)$")
 IMM_RE = re.compile(r"#(0x[0-9a-f]+|\d+)")
 
 
 def objdump() -> str:
-    for candidate in OBJDUMP_CANDIDATES:
-        if candidate.exists():
-            return str(candidate)
-    raise SystemExit("llvm-objdump not found")
+    from objdump_locator import find_objdump
+    return find_objdump()
 
 
 def instructions(so: Path, start: int, size: int) -> list[tuple[int, int, str]]:
