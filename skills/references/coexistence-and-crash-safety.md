@@ -101,7 +101,7 @@ Invariants that make this impossible:
 |---|---|---|
 | Every hook target must be inside the game image | `dladdr(target).dli_fbase == moduleBase` before calling `hook()` | patch arbitrary memory → crash |
 | Never derive a hook target from an unidentified object | identify objects by a **fixed vtable address point** (`vtable(obj) == base + vaddr`), never by argument position | same |
-| A hook target must be *code*, not data | the module check plus a byte check (§4) | same |
+| A hook target must be *code*, not data | the module check plus a byte check (§4); for a mod built for exactly one image, an exact **build-id match read from the mapped image** can stand in for the per-target byte check, because it proves every baked address came from this binary | same |
 | Dereference only readable memory | cached `/proc/self/maps` ranges, **refreshed on a miss**, pointers untagged | stale snapshot or a freed object reads as garbage → crash |
 | Screen controllers and their destructor slots | object readable, vtable readable, and each slot must pass the module check before hooking | hooking a data word as a function → crash on close |
 | Engine calls on the critical path | only functions whose address was verified by bytes | calling the wrong function → undefined behaviour or crash |

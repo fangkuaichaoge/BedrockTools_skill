@@ -26,6 +26,34 @@ its own that X is close enough to a known build**". If it can, no library for X 
 
 ---
 
+## 0b. The gate itself: identify the exact image, not a "version"
+
+A single-build mod can gate harder than a version string or a file size: identify the **exact
+binary** by the linker's build-id. The gate is small, and its failure modes are all silent, so
+get these details right:
+
+* **Walk the loaded objects**, not the filesystem: enumerate the process's mapped images, match
+  the game library by basename, and read the note from the **mapped** `PT_NOTE` segment
+  (`offset → load address + segment vaddr`). A repacked APK means the on-disk file and the loaded
+  image are not necessarily the same bytes; the image is what you are about to hook.
+* **Parse the note list strictly**: every header is 12 bytes, the name and descriptor are each
+  padded to 4 bytes, and both lengths must fit inside the segment before you advance. Accept only
+  the build-id note: name `GNU`, type 3, descriptor length equal to the hash size (20 bytes for
+  SHA-1). Bounds-check every step and treat a malformed list as "not my build".
+* **Compare every byte** of the descriptor, and only then publish the object's load base to the
+  rest of the mod. Publishing base earlier turns a wrong-build gate into hooks at wrong
+  addresses.
+* **Confirm the target image actually carries the note.** Not every shipped library does, and a
+  rebuilt or stripped copy can lose it — then the gate rejects every build, including the right
+  one. Check offline that the exact hash bytes occur in the file and that the note parses,
+  before you ship. (If you produce the image yourself, add `-Wl,--build-id=sha1`.)
+* **Log the rejection** with the expected short id and the fact that nothing was installed.
+  Otherwise the user reports "it does nothing" and the next session reverses the wrong thing.
+* **This is a no-op gate on purpose.** It identifies one build and refuses everything else. When
+  you want a new build supported, that is §2–§7 (code evidence), not a looser gate.
+
+---
+
 ## 1. Split what you need into "scannable" and "not scannable"
 
 | Kind | Scannable at run time? | How |
@@ -193,6 +221,12 @@ the mod stays off).
 ## Pitfalls
 
 * Reversing the "changed code" before checking the build gate. The gate explained everything.
+* Gating on a version string, a file size or a mod-catalog label instead of the image's own
+  identity. Those change with packaging and launcher builds; the build-id note does not.
+* A build-id gate that parses the note loosely (no bounds check, wrong alignment, accepting a
+  truncated descriptor) either accepts a foreign build or rejects the right one — both look like
+  "the mod does nothing".
+* Publishing the image base before the gate has matched.
 * Treating "the generator ran" as proof. The generated include file is what ships; replay it.
 * A data site that decodes in one build and not in the others. Keep only sites that decode in all
   of them.

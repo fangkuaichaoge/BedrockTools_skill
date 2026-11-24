@@ -46,9 +46,10 @@ already had one level deeper, you hooked too high.
 3. **Handle "the library is not loaded yet."** Do not fail; keep a short watcher
    and process each library once, with a per-library "done" flag. A mod that
    itself depends on a sibling library can report false success otherwise.
-   **Do not hook `dlopen` to detect this**, and do not treat "mapped" as
-   "ready" — see `mod-lifecycle-and-crash-safety.md`, which is the detailed
-   treatment of this case.
+   Prefer polling for the image over hooking the loader, and do not treat
+   "mapped" as "ready" — see `mod-lifecycle-and-crash-safety.md`, which is the
+   detailed treatment of this case (including the restricted, post-return
+   loader-gate fallback that can run inside the game process).
 4. **Tear down cleanly** on disable: remove detours, and null out your cached
    original pointers so a later enable re-resolves them.
 5. **Never install a detour you cannot call through.** If the original pointer

@@ -70,9 +70,11 @@ silently did nothing.
    (see `references/lessons-learned.md`). The failure notes are what save the next session.
 8. **A crash outranks a missing feature, always.** Nothing unverified may reach a hook or an
    engine call: every hook target must be proven to be *code inside the game image* (module check
-   plus byte check), every object must be identified by a fixed vtable address point before its
-   slots or methods are used, and every dereference must follow a readable-map check whose snapshot
-   can refresh. When in doubt, draw nothing. A "fix" that changes two things at once is not a fix —
+   plus byte check; for a one-image mod, an exact build-id match of the mapped image is an
+   acceptable substitute — see `references/runtime-build-resolution.md` §0b), every object must be
+   identified by a fixed vtable address point before its slots or methods are used, and every
+   dereference must follow a readable-map check whose snapshot can refresh. When in doubt, draw
+   nothing. A "fix" that changes two things at once is not a fix —
    it costs the ability to attribute the result. Full checklist:
    `references/coexistence-and-crash-safety.md`.
 9. **Work out *which layer* a conflict lives on before touching code.** Another mod can collide at
@@ -105,7 +107,9 @@ silently did nothing.
     support builds you do not have, resolve addresses at start (RTTI vtables, decoded reference
     sites, signatures) and take the layout from the one known build whose code matches strictly.
     If zero or two profiles match, install nothing. Prove it on a holdout build that is not in the
-    table. See `references/runtime-build-resolution.md`.
+    table. See `references/runtime-build-resolution.md`. A build-id gate must read the linker note
+    from the **mapped** image and compare the whole descriptor (§0b); a gate that never passes
+    looks exactly like a broken mod, so log the rejection with the expected id.
 15. **Offer the package when the remaining gap is device-only.** Once the build compiles, the
     package hash matches, and every new address has evidence, ask whether the user wants to test
     it now instead of starting a long verification detour. If the user asks "what are you doing?",
@@ -176,8 +180,10 @@ Using a disassembler MCP provider without fighting it:
   `references/levilauncher-native-mod-guide.md`.
 - **Timing**: the game library may not be loaded when `enable()` runs, so either
   probe with `dlopen("libminecraftpe.so", RTLD_NOW | RTLD_NOLOAD)` (do **not**
-  hook `dlopen` in a Java host process) or install from a watcher that polls then
-  lets the image settle — see `references/mod-lifecycle-and-crash-safety.md`.
+  hook the loader in a Java host process) or install from a watcher that polls
+  then lets the image settle. Inside the game process a guarded, post-return
+  loader gate is a valid **fallback** when the image is genuinely not mapped yet;
+  its conditions are in `references/mod-lifecycle-and-crash-safety.md` §2b.
   `GlossInit(true)` is **not** the mod's job any more: `pl::memory::hook()` calls it
   internally. Call it yourself only if you drive the raw `GlossHook` API directly.
 - **Function location**: the game `.so` is stripped. BedrockTools stores
@@ -242,6 +248,7 @@ behavior the user wants to change?* BedrockTools maps features to functions:
 | Local player tick logic | `NormalTick` | inline hook + event |
 | Frame / render-loop logic | `eglSwapBuffers` (libEGL.so) | inline hook on exported symbol |
 | Visual effect on existing geometry (outline / tint / glow / depth tricks) | none — the graphics-API boundary itself | shader-source injection + two-pass draw, no signatures (see `references/render-pipeline-hooks.md`) |
+| Biome-driven environment overhaul (fog, sky, precipitation, ambient particles, wind audio) | the frame's fog-setup and sky producers, the weather emitter + particle-spawn entry, the world render pass; audio is **not** an engine hook | compose the engine's values, draw your own geometry through its tessellator, suppress vanilla with a scoped marker, synthesise audio (see `references/weather-and-ambience-effects.md`) |
 | Screen open/close detection | `ContainerScreenControllerOpen/Dtor`, `ChatScreenOpen/Dtor` | inline hook + event |
 | Custom on-screen button / panel gated by game state | `MinecraftUIRenderContext` finish (slot 31) + container screen open/dtor | hook finish, draw with the context's own primitives (see `references/engine-ui-buttons-and-overlays.md`) |
 | Real Android widgets (text input, browser, a Java SDK, `Canvas` drawing) | **none — no engine address is involved** | embed a dex in the `.so`, load it with `InMemoryDexClassLoader`, attach `View`s to the Activity decor (see `references/embedding-dex-and-java-ui.md`) |
@@ -305,7 +312,7 @@ Decision table (strict BedrockTools usage):
 | Change a constant, a branch, or force a path | byte patch with original-byte verification | `MOV #0x40 -> #0x3E7`, NOP a branch, `MOV W0,#1; RET` |
 | Override a virtual method | vtable slot via `sdk::virtualCall` / `resolveVtableFunction` | `offsets::VTable` constants |
 | Hook a library import (e.g. EGL) | symbol + `hooks::install` on `dlsym` result | `hookEgl()` |
-| Wait for the game library | `dlopen` hook | `dlopenDetour` in Runtime.cpp |
+| Wait for the game library | poll with `RTLD_NOLOAD` (default); a guarded post-return loader gate only inside the game process | `dlopenDetour` fallback, conditions in `references/mod-lifecycle-and-crash-safety.md` §2b |
 
 Safety rules (BedrockTools practice, non-negotiable):
 
@@ -559,6 +566,17 @@ subscribe through the runtime ABI with `RuntimeListener<Event>`.
   discipline and artifact verification. Read it before starting any
   outline / tint / glow / material-effect mod, and whenever a rendering mod
   "does nothing" or looks wrong.
+- `references/weather-and-ambience-effects.md` — **biome-driven environment effects**
+  (fog, sky, precipitation, ambient particles, wind audio): one validated world snapshot
+  per tick, biome-family classification with neighbourhood and temporal blending, composing
+  the engine's fog/sky/rain instead of replacing them, suppressing vanilla particles with a
+  thread-local scope marker, drawing world-space particles through the engine's own
+  tessellator/material (verification, tint save/restore, tick-to-frame interpolation),
+  synthesising ambience audio with no assets (atomic gains, slew, lifecycle hazards), a
+  single settings table feeding persistence + menu + hot-reloaded rules, the thread/lock
+  architecture, the build-id gate and packaging discipline, an anti-pattern table and a
+  ship checklist. Read it before any weather/ambient-fx mod, and when one is invisible,
+  doubled, or stutters.
 - `references/block-model-replacement.md` — replacing a **block's model** with a
   custom mesh: why the per-face geometry emitters are the right hook layer, why
   the original must always run with only its vertices suppressed, why the

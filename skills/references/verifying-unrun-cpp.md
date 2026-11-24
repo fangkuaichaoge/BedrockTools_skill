@@ -97,6 +97,37 @@ is indistinguishable from a hook that never fired.
 
 ---
 
+### 2.6 Layout and return-value tripwires
+
+Every engine struct you model in your own headers should carry an assertion that fails at
+compile time if the model drifts:
+
+```cpp
+static_assert(offsetof(EngineThing, field) == <displacement>);
+static_assert(sizeof(EngineThing) == <size>);      // when the size is known
+static_assert(sizeof(std::string) == 24);          // ABI assumptions you inherited
+```
+
+A `static_assert` only proves your header agrees with itself, so pair it with the consumer's own
+disassembly: the displacement the engine actually loads must equal the asserted one. When a
+field cannot be proven, leave the assertion out and mark the struct "unproven" instead of
+asserting a guess early.
+
+**Return-by-value hooks need explicit rules.** On AArch64 a large composite return goes through
+a caller-provided hidden buffer (`sret` in a dedicated register). Two consequences:
+
+* model the **exact** returned type — inventing a smaller or "cleaner" return type to keep the
+  signature readable changes the ABI and corrupts the caller's buffer;
+* a multi-KB struct returned by value means a multi-KB copy on every call. If you only consume
+  one field, prefer a hook that exposes the field through a pointer (or a site that writes it),
+  rather than wrapping the whole return. If wrapping is the only option, prove the return type
+  from the caller's stack frame and say in the report that the ABI came from disassembly.
+
+This is also why a "small and harmless" forwarder between two mods can be wrong: keep the compiler
+from making its own choice by matching the engine's declaration exactly.
+
+---
+
 ## 3. Techniques that only look like verification
 
 | Looks like | Why it is not |

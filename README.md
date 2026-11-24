@@ -1,4 +1,4 @@
-﻿# bedrock-pe-modding
+# bedrock-pe-modding
 
 **Minecraft Bedrock (PE) native modding skill + hooking tutorial**, distilled
 from the open-source [BedrockTools](https://github.com/QYCottage/BedrockTools)
@@ -44,7 +44,7 @@ bedrock-pe-modding/
 │   └── workflows/ci.yml             # syntax + frontmatter + CLI smoke test
 └── skills/                          # the installable skill directory
     ├── SKILL.md                     # entry point: architecture, API table, workflow
-    ├── references/                  # 36 deep-dive notes, loaded on demand
+    ├── references/                  # 37 deep-dive notes, loaded on demand
     ├── scripts/                     # 25 offline tools
     └── assets/
         └── hud-button-templates/    # 14 PNG button templates (normal + pressed)
@@ -59,7 +59,7 @@ Two layers, deliberately separate:
   to that directory (`references/…`, `scripts/…`), so the folder works wherever
   it is installed — the copy just has to keep the name your agent expects.
 
-### `skills/references/` — 36 notes
+### `skills/references/` — 37 notes
 
 | File | Answers |
 |---|---|
@@ -76,9 +76,9 @@ Two layers, deliberately separate:
 | `levilauncher-native-mod-guide.md` | "What does the host side contract look like?" (manifest, lifecycle, config, Mod Menu, input) |
 | `ida-workflow.md` | "How do I drive IDA by address (incl. IDA Pro MCP) without wasting an afternoon?" |
 | `embedding-dex-and-java-ui.md` | "How do I run compiled Java/Kotlin (real Android widgets, a Java SDK, `Canvas` drawing) from a native mod?" (javac→d8→`.rodata`, `InMemoryDexClassLoader`, Activity attach, drag, WebView state, `onDraw`) |
-| `ida-workflow.md` | "How do I drive IDA by address (incl. IDA Pro MCP) without wasting an afternoon?" |
 | `rea-and-disassembler-providers.md` | "Which disassembler back-ends exist and how do I drive them?" |
 | `render-pipeline-hooks.md` | "How do I add a visual effect on a closed-source renderer?" |
+| `weather-and-ambience-effects.md` | "How do I add fog, ambient particles and wind audio that compose with the engine instead of fighting it?" |
 | `shader-source-injection.md` | "How do I patch GLSL as text without breaking the link?" |
 | `block-model-replacement.md` | "How do I replace a block's model at the per-face tessellation layer?" |
 | `hud-buttons-and-icon-art.md` | "How do I add launcher HUD buttons and draw pixel-art icons?" |
@@ -87,7 +87,7 @@ Two layers, deliberately separate:
 | `verifying-unrun-cpp.md` | "How do I defend C++ I cannot compile or run here?" |
 | `lessons-learned.md` | distilled debugging experience across the above |
 
-### `skills/scripts/` — 24 tools
+### `skills/scripts/` — 25 tools
 
 | Script | Question it answers | Deps |
 |---|---|---|
@@ -108,7 +108,6 @@ Two layers, deliberately separate:
 | `ida_mcp_client.py` | talk to IDA Pro MCP from a shell (unwraps the JSON envelope) | stdlib |
 | `gen_dex_payload.py` | embed a `.dex` in a mod as a C array, rejecting truncated/non-dex input | stdlib |
 | `objdump_locator.py` | find `llvm-objdump` from `LLVM_OBJDUMP` / `PATH` / NDK env vars instead of a hard-coded path | stdlib |
-| `ida_mcp_client.py` | talk to IDA Pro MCP from a shell (unwraps the JSON envelope) | stdlib |
 | `ida_decompile_targets.py` | batch-decompile a list of addresses from inside IDA | IDAPython |
 
 `elf_facts.json` (a generated ELF dump) is **not** committed — it is

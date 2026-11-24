@@ -34,10 +34,10 @@ either attach safely or defer.
 
 ---
 
-## 2. The wrong fix, and why it crashes
+## 2. The wrong shape: hooking the loader in a host process
 
-The obvious way to wait is to hook `dlopen` and attach from the detour. This is
-what the failing mod did, and it crashed the launcher every time.
+The obvious way to wait is to hook `dlopen` and attach from the detour. This is what the failing
+mod did, **in the launcher's own Java host process**, and it crashed the launcher every time.
 
 Why it fails:
 
@@ -56,11 +56,46 @@ Why it fails:
 Even done carefully, hooking a loader entry point in a host process you do not
 own is a large blast radius for what is only a *timing* problem.
 
-**Rule: never hook `dlopen` just to learn when a library appeared.**
+**Rule: never hook the loader in a process you do not own, just to learn when a library appeared.**
+In the game process a guarded variant can work — §2b — but it remains a fallback, not the first
+choice.
+
+### 2b. The one shape where an in-band loader gate is acceptable
+
+A different project attached from a **guarded loader gate** and shipped without the crash above.
+The differences are structural, not stylistic: copy the conditions, not the shortcut.
+
+* It runs **inside the game process** (the mod is already loaded there), not in the launcher's
+  activity, so the loader traffic around it is small and known.
+* It installs the gate only as a **fallback**: when `enable()` runs and the game image is already
+  mapped, no loader hook is installed at all.
+* It covers **both** loader entry points the platform exposes (the plain call and the
+  platform-specific extended variant), because a caller may use either one.
+* The detour calls the original **first** and attaches only when the original returned a
+  non-null handle for the game library. By then relocations and early initializers have run: this
+  is the "mapped **and settled**" state that §3.2 has to wait for with a polling probe, obtained
+  here for free. That is the property that makes this shape viable at all.
+* The attach path **does not load anything itself** and does not trust a pointer passed by the
+  detour: it re-walks the loaded-image list, re-verifies the exact image (build gate) and only
+  then publishes the base.
+* Attach is idempotent — mutex plus a tri-state (waiting / ready / failed) published after the
+  work — so a concurrent second load cannot double-install.
+* Failure is a logged no-op, never a partial install: record every (target, detour) pair at
+  install time and, when one hook in the chain fails, unhook from the recorded point backwards.
+
+Conditions that are **not** optional:
+
+* **Never detach the loader detour while another thread can be inside it.** The project these
+  notes come from removes it at unload, which is a real crash-on-unload hazard; the safe variant
+  leaves the gate installed for the process lifetime and removes only the feature hooks.
+* Keep the loader detour to pointer and identity checks — no logging, no allocation, no engine
+  calls.
+* If the host can disable the mod while the process keeps running, the gate checks a stop flag
+  and otherwise calls straight through.
 
 ---
 
-## 3. The fix: poll, then wait for the library to settle
+## 3. The default attach: poll, then wait for the library to settle
 
 Two steps, both necessary.
 
@@ -231,7 +266,9 @@ made the game's perspective button stop responding.
 ## 8. Fail-open checklist for the attach path
 
 - [ ] `enable()` never assumes the game library is mapped.
-- [ ] No hook on `dlopen` / the loader, anywhere, for any reason.
+- [ ] Default: no hook on the loader; poll with `RTLD_NOLOAD` (or the platform equivalent).
+- [ ] If a loader gate is used anyway: every condition in §2b holds, and it is never detached
+      while a thread can still be inside it.
 - [ ] A watcher polls for the library with `RTLD_NOLOAD` and has a bounded
       budget plus a stop flag honoured on disable/unload.
 - [ ] After the library appears, a **settle delay** elapses before any signature
@@ -250,6 +287,8 @@ made the game's perspective button stop responding.
 
 * `hook-engineering.md` §3 — hook lifecycle, including the "library not loaded
   yet" case this file expands on.
+* `weather-and-ambience-effects.md` §10 — a shipped project's build-id gate that
+  only ever installs on the exact image it was built for.
 * `instrumentation-and-diagnostics.md` — building a mod that reports its own
   startup progress.
 * `build-deploy.md` — manifest, packaging, and deployment.

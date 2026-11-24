@@ -27,6 +27,30 @@ objects, mesh builders or the scene graph. Design the effect so it does not
 need them, and say so out loud before starting - guessing that the boundary can
 do more than it can is the most expensive mistake in this area.
 
+### 1b. Custom geometry and colours the engine already knows how to draw
+
+Two engine-level techniques are worth preferring over raw API work when the
+effect is world-space and the engine already has the machinery:
+
+* **Draw through the engine's own mesh path.** Hook the world render pass, call
+  the original first, then submit your own mesh through the engine's tessellator
+  and a material object it already owns. You inherit its state tracking, its
+  culling conventions and its blend/depth policy; nothing about GL state is
+  yours to break. The safety work is on *your* side: verify the material object
+  (resolved flag + name hash of the intended material) and draw nothing when it
+  does not match; check the tessellator's in-use/recording flags and skip the
+  frame instead of corrupting another pass; borrow the tint colour holder only
+  after saving its RGBA **and** its "has colour" flag, and restore both.
+* **Compose the engine's values, do not replace them.** Fog colour/distance,
+  sky colour and precipitation intensity already encode dimension, time of day,
+  water and other effects. Scale or tint the value the original produced
+  (multiply, then clamp), and skip the modification entirely when it is neutral
+  or the medium is not weather. Replacing a fog distance with a hand-picked one
+  is how an effect looks right in one dimension and wrong in every other.
+
+Details, geometry and the per-frame interpolation rule for tick-driven effects:
+`weather-and-ambience-effects.md` §4 and §6.
+
 ## 2. Enumerate every path that reaches the API, then prove which one fires
 
 A symbol can be reached by at least three routes:
@@ -208,6 +232,10 @@ costs more than an explicit uncertainty.
 
 * Effect = same geometry, new uniforms/state -> API-level hook. Anything else
   -> engine level, or not at all.
+* World-space custom geometry -> the engine's own mesh+tessellator+material path,
+  with the material verified before every draw.
+* Change any engine-produced colour or distance by composing with it, never by
+  overwriting it; skip when your modifier is neutral.
 * Wrap every resolution path; log the first real hit of each entry point.
 * Match identifiers by normalised family; never by literal string.
 * Make every gate explain its "no", with the values it compared.

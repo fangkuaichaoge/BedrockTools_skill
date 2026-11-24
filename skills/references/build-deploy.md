@@ -121,6 +121,22 @@ Notes:
   -fdata-sections -flto -fno-rtti -fvisibility=hidden`, linker
   `-Wl,--gc-sections -Wl,--icf=all -Wl,--hash-style=gnu`.
 
+## 5b. Link and export discipline for a shipped mod
+
+Flags worth copying from a project that ships one `.so` against a closed binary:
+
+- **Export only the host's lifecycle symbols.** A version script whose `global:` lists exactly
+  the entries the host looks up, and `local: *;` for everything else, so the binary cannot leak
+  symbols into the process.
+- **Hide the rest at compile time**: `-fvisibility=hidden`, and `-fno-rtti` where nothing needs
+  it. Exception support is a separate decision — a detour that throws aborts the process, so
+  keep throwing and catching out of hook paths regardless.
+- **`-Wl,--no-undefined`**: a missing dependency then fails the link instead of the device load.
+- **16 KB page alignment** (`-Wl,-z,max-page-size=16384`) for current Android, plus
+  `--build-id=sha1` so the artifact is identifiable in a crash report.
+- **Strip release builds**, but keep the unstripped artifact for symbolication; a debug variant
+  with symbols is what lets a device crash be attributed.
+
 ## 6. Packaging
 
 Two options:
@@ -146,6 +162,17 @@ resources/...       (optional)
 BedrockTools' `scripts/package_levipack.py` reads Name/Author/Description/
 Version from `include/bedrocktools/Version.hpp`, builds the manifest, zips,
 then re-reads the zip to verify entries, manifest content, and file sizes.
+
+### Rules that keep a package honest
+
+* **Stamp the version into the binary at build time**, and have the packager refuse to package
+  when the binary does not contain the manifest version. One substring search catches the most
+  common release mistake: the manifest moved on, the `.so` did not.
+* **Write to a temporary archive, reopen and validate it, then replace the output.** A truncated
+  zip is silently unusable, and a partially written file is worse than a failed build.
+* **Set the overwrite flags deliberately.** Most hosts default to *not* replacing existing
+  files; list only the entries that really must replace on upgrade. Leaving them empty means an
+  update can silently keep old assets.
 
 ## 7. Deployment
 
