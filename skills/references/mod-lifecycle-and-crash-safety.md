@@ -294,3 +294,37 @@ made the game's perspective button stop responding.
 * `build-deploy.md` — manifest, packaging, and deployment.
 * `feature-rollback.md` — removing a feature cleanly once you decide it should
   not ship.
+
+---
+
+## 10. Field notes from a real port
+
+Traps the general lifecycle text does not spell out:
+
+- **A build-specific fallback address needs the runtime image base.** Never call the hook installer
+  with a raw file virtual address; the image is relocated. Compute `runtime = dli_fbase +
+  file_vaddr`, log both, and use the same rule for any engine function used only at draw time. A
+  wrong address dies inside the installer before the detour exists, so there may be no FATAL line.
+- **A vtable slot number does not prove the accessor.** Decompile the slot body and match the
+  prototype to your call exactly; prefer a pure field read over a computing method; cross-check the
+  value with a second accessor and log it.
+- **Nearby-actor enumeration** returns a three-pointer vector of 16-byte records
+  `{actor, distance, pad}`; classify with the RTTI name (digits prefix stripped), read the position
+  from the actor's state-vector pointer, call it from a throttled tick (about once a second), and
+  publish only aggregated values to the HUD.
+- **Overlay draw-command details**: `Text` size is pixel font height, not scale; zero width/height
+  keeps the left anchor; coordinates are surface pixels (scale thickness/radii from the HUD surface
+  size); `Line` takes a delta, not an end point; `RectFilled` segments are the most portable
+  primitive across host builds; clamp position sliders to the real UI space.
+- **Finding the per-frame world renderer**: find a leaf that loads the tessellator from the screen
+  context and calls the immediate-mesh helper; intersect its callers with the tessellator-begin
+  callers; walk callers up to the frame entry; confirm the context argument by decompiling. If the
+  entry or ABI cannot be confirmed, ship nothing.
+- **Optional hooks and stale caches**: install a hook only when its signature resolves; if the level
+  destructor is unavailable, clear tracked actors when the level pointer changes; never cache a
+  failed texture fetch forever; keep a text-only fallback path.
+- **Client-side approximations** of server-owned data: budget queries per tick, show progress,
+  restart scans only after a movement threshold plus a cooldown, deduplicate multi-block objects,
+  and label derived relations as approximations.
+- **A missing FATAL line still narrows the bug**: if the last log line is immediately before a hook
+  install, suspect the target address rather than the feature logic.

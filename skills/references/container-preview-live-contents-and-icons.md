@@ -261,3 +261,29 @@ Each round that added crash protection here fixed one crash and introduced a dif
 - **never rename or overwrite an old backup when the version number changes** - one fine-grained
   snapshot was lost that way and the release had to be reconstructed from a scripted recipe. Backups
   are immutable; create new folders.
+
+## 13. Panel layout, text and input (from the companion UI notes)
+
+- **Measure before drawing.** The UI context exposes a line-length call; the text draw takes a
+  rectangle plus alignment. Layout therefore has to measure first, then draw, or panels resize as
+  contents change. For a two-column row (name and count), measure each column separately:
+  `width = padding + icon + textOffset + widestName + gap + widestCount + padding`.
+- **Paginate, do not truncate.** A full container does not fit one column on a phone:
+  `rowsPerColumn = max(1, rows)`, `columnCount = ceil(rowCount / rowsPerColumn)`,
+  `columnX(i) = originX + (i / rowsPerColumn) * columnWidth`,
+  `rowY(i) = originY + header + (i % rowsPerColumn) * stride`. Keep column width uniform
+  (measured from the widest entry); treat `rows = 0` as "single column, unlimited".
+- **Context lifetime.** The UI context is a per-frame object; capture it on the frame's UI pass and
+  never cache it across frames or touch it from another thread. Drawing only works after the game
+  has drawn something that sets the context.
+- **Touch does not follow UI units.** A control drawn through the UI context lives in engine UI
+  pixels; touch arrives as view pixels, and the scale between them is not in the SDK headers.
+  Either use an input gesture that needs no coordinates (a second finger down, consumed by the
+  callback), or calibrate the scale before promising a hit-test.
+- **Do not put a mapping check in the per-frame path.** A `/proc/self/maps` cache goes stale; a
+  failed lookup that turns into "skip this frame" silently disables the feature. If a check is
+  unavoidable, refresh on a miss and fail open; the tick-stamp rules above avoid needing it.
+- **HUD overlay ship checklist.** Panel appears with the crosshair and disappears when the screen
+  opens; position/scale/sensitivity reachable from the menu and immediate; icons survive opening
+  and closing the screen; leaving a save with the panel visible does not crash; every display mode
+  renders a full container; names follow the player's language.

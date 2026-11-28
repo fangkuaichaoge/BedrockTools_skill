@@ -224,7 +224,7 @@ carrying in your head, because each one cost a separate debugging round:
   `load()`/`enable()` synchronously. See `mod-menu-registration.md`.
 - **Do not validate pointers in the frame path.** A stale `/proc/self/maps` cache turns a safety
   check into "the feature stops drawing". Prefer tick-based lifetime rules; see
-  `preview-panels-and-container-ui.md` §7.
+  `container-preview-live-contents-and-icons.md` §13.
 - **Never write one actor's stacks into another to "fix" latency.** It produced both a
   use-after-free and disappearing item icons after a container screen re-synced the real container.
 - **Container slot indices are per class and stable across patch builds; internal offsets are
@@ -303,12 +303,12 @@ carrying in your head, because each one cost a separate debugging round:
   one - the workspace should never hold a pile of "maybe" folders.
 - Backups stay immutable once written; if one is wrong, write the corrected folder and delete the old.
 - Prove a rollback by hash (rebuild, compare with the checkpoint package).
-- See `references/version-checkpoints-and-change-notes.md`.
+- See `references/feature-rollback.md` §9.
 
 - **The moment a fix is confirmed or a feature is accepted, offer a checkpoint** and write a change note inside it.
 - Backups are immutable: new folder per checkpoint, never rename or overwrite. Renaming an old backup on a version bump lost a snapshot that had to be rebuilt from a script.
 - Prove a rollback by hash (rebuild, compare with the checkpoint's package) and force a rebuild after restoring older files.
-- See `references/version-checkpoints-and-change-notes.md`.
+- See `references/feature-rollback.md` §9.
 
 ### Waila-style overlays: icons, names and staying alive
 
@@ -360,7 +360,7 @@ carrying in your head, because each one cost a separate debugging round:
   wrong value, or an A/B test where only the suspected code changed. Otherwise it is a hypothesis:
   change one variable, test, and keep a known-good backup plus a failed-attempt backup.
 
-### Layout shifts after a game update
+### 1.26.60 layout shifts
 
 - **A base-class growth moves every derived field.** Confirm one offset from the game's own
   disassembly (e.g. Actor::mDimension 0x1C0 -> 0x1E0), then assume sibling fields moved too:

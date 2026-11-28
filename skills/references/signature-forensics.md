@@ -211,10 +211,14 @@ accident:
 ```cpp
 constexpr std::uint64_t fnv1_64(const char* s) { /* multiply, then xor */ }
 
-static_assert(fnv1_64("head")   == 0xF153217ED86AE247ULL, "hash mismatch");
-static_assert(fnv1_64("hat")    == 0xD8C4C1186B9B0C08ULL, "hash mismatch");
-static_assert(fnv1_64("helmet") == 0x3B70E40D69930B2EULL, "hash mismatch");
+static_assert(fnv1_64("head")   == <verified-hash>ULL, "hash mismatch");
+static_assert(fnv1_64("hat")    == <verified-hash>ULL, "hash mismatch");
+static_assert(fnv1_64("helmet") == <verified-hash>ULL, "hash mismatch");
 ```
+
+The literals are deliberately placeholders: pin the values **you** verified on the build you ship,
+never values copied from someone else's notes (a hash is only meaningful for the string order and
+the function you measured).
 
 This caught a real mistake at compile time instead of shipping a feature that
 silently did nothing.
@@ -321,13 +325,13 @@ a function that asserts **names itself in rodata**, with the source file and lin
 number. Find the string, `xref` it, and you have the function — no guessing.
 
 ```
-0x25e7143  static const TextureAtlasItem &BlockGraphics::getTextureItem(
+<vaddr>  static const TextureAtlasItem &BlockGraphics::getTextureItem(
                const std::string &, std::weak_ptr<AtlasItemManager>,
                std::unordered_map<std::string, TextureAtlasItem> &)
 ```
 
 Cross-check that the referencing code really is the assert pattern
-(`bl <AssertFailed>` then a deliberate `str 0xdeadc0de` trap store), so you are
+(`bl <AssertFailed>` then a deliberate `str <trap-value>` trap store), so you are
 not looking at a logger that merely mentions the function.
 
 **2. RTTI -> typeinfo -> vtable.** Gives the virtual methods of a class, in slot

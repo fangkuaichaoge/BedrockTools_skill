@@ -57,7 +57,7 @@ Two different functions can look like "item access":
 You want the direct one. It is self-contained and safe on empty slots:
 
 ```asm
-; HopperBlockActor slot 71 (one specific build)
+; HopperBlockActor slot 71 (build <A>)
 mov    w8, #0x98            ; ItemStack stride
 cmp    w1, #4               ; index > capacity-1 ?
 adrp   x9, <empty stack>    ; engine's global empty stack
@@ -85,7 +85,7 @@ sub-object and will hand back nonsense. That mistake was made and recorded here.
 Slot **indices** are stable across patch builds; the **internal offsets** are not. Same class, two
 builds:
 
-| what | build A | build B |
+| what | <build A> | <build B> |
 |---|---|---|
 | hopper items array | `+0x290` | `+0x280` |
 | pot item | `+0x298` | `+0x290` |

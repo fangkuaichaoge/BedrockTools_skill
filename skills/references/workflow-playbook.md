@@ -27,12 +27,13 @@ Two rules apply to every turn:
 | The user says | Track | Start with |
 |---|---|---|
 | "add X", "make it show Y" | **Feature** (§2) | `feature-workflow.md`, `signature-forensics.md` |
+| "how did mod X do Y", "I want that technique" | **Technique** (§2b) | `in-world-3d-rendering.md`, `embedding-dex-and-java-ui.md` §11 |
 | "X is wrong", "shows ✗ where it should be ✓" | **Bug** (§3) | the data path that produces X |
 | "it crashes", "the launcher asks to re-import" | **Crash** (§4) | `mod-lifecycle-and-crash-safety.md`, `coexistence-and-crash-safety.md` |
 | "doesn't work on version N", "support N" | **Version** (§5) | `runtime-build-resolution.md` §0 |
 | "breaks with mod Z installed" | **Coexistence** (§6) | `coexistence-and-crash-safety.md` |
 | "remove X", "go back to how it was" | **Rollback** (§7) | `feature-rollback.md` |
-| "perfect", "no problems", "back it up" | **Checkpoint** (§8) | `version-checkpoints-and-change-notes.md` |
+| "perfect", "no problems", "back it up" | **Checkpoint** (§8) | `feature-rollback.md` §9 |
 
 When one message carries two tracks, do them in this order: crash, then version, then bug, then
 feature.
@@ -42,12 +43,28 @@ feature.
 ## 2. Feature track
 
 1. Name the subsystem that owns the behaviour (which screen, renderer, block or item class).
+   If the feature is **your own 3D geometry in the world**, start from `in-world-3d-rendering.md`;
+   if it needs a **Java object, a JS bridge or an HTML page**, start from
+   `embedding-dex-and-java-ui.md` §11. Neither kind has an engine function to hook in the usual
+   sense — the first hooks the frame's world-render entry, the second has no engine address at all.
 2. Find the engine function that already does it, and confirm the data path exists. Check which
    copy you are reading (client or integrated server) before building UI on top of it.
 3. Ask about semantics the evidence cannot settle (what a mark means, which targets, icon or text).
    Do not ask what the binary answers.
 4. Signature: unique on **every** supported build. Vtable slots: verified against the live table.
 5. Implement behind fail-open guards. Build, package, hand over.
+
+## 2b. Technique track ("learn how a shipped mod does it")
+
+1. Locate the mechanism in the artifact, not in its description: packaging shape → symbol/string
+   scan → targeted decompile of one function at a time (`so-analysis.md`,
+   `targeted-static-analysis.md`, `ida-workflow.md`).
+2. Separate **engine API** from **mod code**, and label every claim verified / inferred / unknown.
+3. Re-implement the idea behind your own guards and fail-open paths; never copy identifiers,
+   addresses or constants from the artifact.
+4. The two mechanism families this skill documents in depth have dedicated notes: world-space
+   geometry (`in-world-3d-rendering.md`) and the Java-object/page half
+   (`embedding-dex-and-java-ui.md` §11).
 
 ## 3. Bug track
 

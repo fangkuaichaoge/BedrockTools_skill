@@ -29,6 +29,9 @@ User wants feature F
    (d) change object state?           -> field offset write / call
    (e) change virtual dispatch?       -> vtable hook
    (f) change when it runs?           -> dlopen / EGL / tick hooks + events
+   (g) no engine function exists?      -> the feature is your own drawing or your own Java UI:
+                                          borrow the engine's materials + tessellator behind the
+                                          frame hook, or embed a class-shape dex + page
         |
         v
 5. Verify signature is UNIQUE on the target .so
@@ -161,6 +164,22 @@ decision site where it is dropped, not by forcing an upstream gate:
 - When a working reference mod exists, reverse it to learn the exact decision
   points, then apply the same minimal patches with original-byte verification.
 
+## When there is no engine function
+
+Some features are not a modification of existing behaviour at all:
+
+- **Your own 3D geometry in the world** (panels, labels, icons, quad-based models). Do not build a
+  GL pipeline. Hook the frame's world-render entry, borrow the engine's materials by name, submit
+  through its tessellator behind RAII state guards, and rasterize panels/text as described in
+  `in-world-3d-rendering.md`.
+- **A Java-visible object, a JS bridge or an HTML page.** No engine address is involved. Use a
+  dex that declares only class shape, load it in memory and bind the native methods with
+  `RegisterNatives`; put the page over a `WebView` loaded from embedded bytes
+  (`embedding-dex-and-java-ui.md` §11).
+
+The usual feasibility questions still apply — but the "hook strategy" is `capture a frame` for the
+first case and `no engine hook at all` for the second.
+
 ## Decision shortcuts
 
 - Function returns a value you want to change -> inline hook, call orig first,
@@ -176,6 +195,10 @@ decision site where it is dropped, not by forcing an upstream gate:
 - Feature needs an object only available later (ClientInstance, local player)
   -> hook `ClientInstanceUpdate`/`NormalTick` and cache the pointer
   (BedrockTools `gamehooks::clientInstance()`).
+- Feature is your own 3D geometry in the world -> capture the frame's world-render entry and borrow
+  the engine's materials/tessellator (`in-world-3d-rendering.md`).
+- Feature needs a Java object, a JS bridge or an HTML page -> class-shape dex + `RegisterNatives`
+  + an embedded page over a `WebView` (`embedding-dex-and-java-ui.md` §11).
 
 ## Feasibility rules of thumb (from BedrockTools experience)
 

@@ -1,6 +1,6 @@
 ---
 name: bedrock-pe-modding
-description: "Develop native mods and hooks for Minecraft Bedrock (PE) Android arm64 by following the exact techniques used in the open-source BedrockTools project. Use when the user wants to: hook, patch, or mod libminecraftpe.so; write a LeviLauncher / preloader native mod (.so); turn a desired feature into concrete game-function hooks; decide between inline hooks, vtable hooks, and direct byte patches; extract or verify ARM64 byte signatures; build an arm64-v8a Android .so with NDK + CMake or xmake; package a mod (manifest.json / .levipack); port a mod to a new Bedrock version or make it run on unlisted builds (runtime address resolution); follow the end-to-end mod workflow (feature, bug, crash, version, release, hand-over to the user for testing); or understand Bedrock PE internals such as tick, render, FOV, packet, attack, screen, weather, time, skin, and UI hooks. Not for Java/Spigot/Forge mods or for non-Bedrock ELF targets without adaptation."
+description: "Develop native mods and hooks for Minecraft Bedrock (PE) Android arm64 by following the exact techniques used in the open-source BedrockTools project. Use when the user wants to: hook, patch, or mod libminecraftpe.so; write a LeviLauncher / preloader native mod (.so); turn a desired feature into concrete game-function hooks; decide between inline hooks, vtable hooks, and direct byte patches; extract or verify ARM64 byte signatures; build an arm64-v8a Android .so with NDK + CMake or xmake; package a mod (manifest.json / .levipack); port a mod to a new Bedrock version or make it run on unlisted builds (runtime address resolution); follow the end-to-end mod workflow (feature, bug, crash, version, release, hand-over to the user for testing); decide what to build and which route to take; draw your own 3D geometry in the world (panels, labels, icons); embed a class-shape dex plus a WebView page UI; pin one game build with a build-id + RVA signature profile; rewrite geometry at a vanilla draw callsite; drive vanilla container screens or a server-side open session; build a launcher-HUD settings UI; capture a session timeline or author cinematic camera paths; embed an ImGui editor; or understand Bedrock PE internals such as tick, render, FOV, packet, attack, screen, weather, time, skin, and UI hooks. Not for Java/Spigot/Forge mods or for non-Bedrock ELF targets without adaptation."
 ---
 
 # Bedrock PE Native Modding (BedrockTools patterns)
@@ -23,6 +23,11 @@ Read `references/workflow-playbook.md` at the start of every mod session. It cla
 request (feature, bug, crash, version, coexistence, rollback, checkpoint), gives the track for
 each, says when to stop verifying and hand the user a package, how to read the user's reactions,
 and the report format. The rest of this skill is the detail behind those tracks.
+
+Before designing the feature itself, read `references/mod-creative-thinking.md`: the ten-second
+demo test, the route ladder (settings → observe → state → reuse a vanilla screen → custom UI →
+world geometry → own renderer), reuse-before-build, coexistence, scope budgets, and the one-page
+design to fill in before writing code.
 
 For "the mod does not work on game version N": check the build gate first, then
 `references/runtime-build-resolution.md` (supporting builds you do not have) or
@@ -165,7 +170,7 @@ Rules that make this stick:
 Full method, including the two facts that make offline analysis cheap and the
 pitfalls that waste an afternoon: `references/targeted-static-analysis.md`.
 Using a disassembler MCP provider without fighting it:
-`references/rea-and-disassembler-providers.md`.
+`references/ida-workflow.md` §9.
 
 ## Architecture (understand before coding)
 
@@ -252,12 +257,28 @@ behavior the user wants to change?* BedrockTools maps features to functions:
 | Screen open/close detection | `ContainerScreenControllerOpen/Dtor`, `ChatScreenOpen/Dtor` | inline hook + event |
 | Custom on-screen button / panel gated by game state | `MinecraftUIRenderContext` finish (slot 31) + container screen open/dtor | hook finish, draw with the context's own primitives (see `references/engine-ui-buttons-and-overlays.md`) |
 | Real Android widgets (text input, browser, a Java SDK, `Canvas` drawing) | **none — no engine address is involved** | embed a dex in the `.so`, load it with `InMemoryDexClassLoader`, attach `View`s to the Activity decor (see `references/embedding-dex-and-java-ui.md`) |
+| Your own **3D geometry in the world** (panels, labels, icons, quad-based models) | none — hook the frame's world-render entry and borrow its state | capture the context, borrow engine materials by name, drive the tessellator behind RAII guards, rasterize panels, engine-font text, cell-probe occlusion (see `references/in-world-3d-rendering.md`) |
+| A **Java object / JS bridge / real HTML UI** built without Java logic | none — no engine address is involved | class-shape dex + `RegisterNatives` + `InMemoryDexClassLoader`, embedded page over a `WebView`, page-initiated pull protocol (see `references/embedding-dex-and-java-ui.md` §11) |
 | Hit result / reach | `LevelGetHitResult`, `HitResultGetEntity` | resolve + call as function |
 | Player name / skin | `ActorGetNameTag`, `ActorSetNameTag` + `offsets::Player::mName/mSkin` | inline hook / field access |
 | Weather / biome | `WeatherTick`, `WeatherIsRaining`, `BiomeGetTemperature` | inline hook or field access via `offsets::Weather` |
 | Packet send to server | `LoopbackPacketSenderSendToServer` | inline hook (inspect/modify before send) |
 | Bone / model pose (position, rotation, scale) | bone lookup + its transform record | inline hook on the lookup, edit the returned record (see `references/signature-forensics.md` §9) |
 | Replace a block's **model** (custom mesh for a block category) | `BlockTessellator::_tessellateFace{Up,Down,North,South,East,West}` + `Tessellator::vertexUV` | inline hooks: suppress the original's vertices, emit your own through the real vertex emitter (see `references/block-model-replacement.md`) |
+| Change geometry the engine **already draws** (a map, sign, frame face, item) | none new — intercept the vanilla call site | return-address callsite key, emit/swallow vertices, swap one argument object, sret shim for large returns (see `references/in-place-render-interception.md`) |
+| Reuse a **vanilla screen** through the engine's own open path | the engine's own use/interact verbs and its open dispatch | nearby-block path, session-scoped validity handling, detached-actor identity substitution, host-tick session liveness (see `references/vanilla-screens-and-server-sessions.md`) |
+| HUD labels / settings UI with **no engine UI hook** | none — the host's draw-command list | one settings table driving defaults/schema/clamp, worker thread for IO, draw commands as data (see `references/launcher-hud-data-driven-ui.md`) |
+| Supporting **one exact game build** for engine internals | the image's build id + RVA + pattern table | generate/verify the profile, all-or-nothing gate, vtable identity checks, fail open (see `references/build-locked-abi-profiles.md`) |
+| One mod with **many small features** (independent toggles, shared HUD service) | the UI context's finish/text slots as one shared service | module base class + registry, derived enable state, one UI render-pass subscription, identity-bound delayed actions, named slot/offset headers (see `references/module-framework-and-shared-services.md`) |
+| Integrate with the **host's overlay/menu surface** | the host's own Java classes via JNI | cached host API handles, checked JNI + environment RAII, embedded Runnable task dex posted to the UI thread, atomic task queue, host UI-mode checks (see `references/launcher-java-overlay-bridge.md`) |
+| **Capture a session timeline** and reconstruct it deterministically (seek, frame export) | the packet path, chunk delivery and the tick | ordered action stream + context snapshot, reserved synthetic identity, per-kind field filtering, private reconstruction world, phase-machine replay, deterministic frame clock (see `references/session-timeline-capture.md`) |
+| **Cinematic camera paths** / a camera editor | the frame's camera objects (renderer / component / level) | keyframes with per-segment interpolation, shortest-arc sampling, narrowest application point, FOV observe/restore, pure-tick sampling for export (see `references/cinematic-camera-paths.md`) |
+| A **complex in-game editor** (timeline, panels, tables) | none — your own GL pass over the composed frame | vendored ImGui + one GL backend, embedded font/assets, explicit input capture vs pass-through, throttled frame loop (see `references/imgui-native-overlay.md`) |
+
+**Before touching engine internals, pin the build.** Generate a profile: the image's build id plus
+one `{name, address, byte pattern}` entry per engine function or slot, verified by an independent
+checker. A mod that guesses addresses between builds is the most common way an in-world feature
+silently stops working; see `references/build-locked-abi-profiles.md`.
 
 **Before installing a single hook**, read
 `references/mod-lifecycle-and-crash-safety.md`. The preloader enables mods
@@ -430,11 +451,7 @@ subscribe through the runtime ABI with `RuntimeListener<Event>`.
   `ItemStackBase::getName()` (non-virtual, `std::string` by value, sret in `x8`) and the
   player's language through the engine's localization object, including the CJK cross-check
   that turns a guessed offset into a verified one.
-- `references/preview-panels-and-container-ui.md` — building a **custom HUD panel** that
-  shows real container contents: capturing the UI render context, drawing item icons through
-  the engine's item renderer, measuring text before laying it out, paginating a 54-slot
-  container into columns, and the lifetime rules that stop such a mod from crashing when the
-  player leaves a save.
+
 - `references/container-preview-live-contents-and-icons.md` — an overlay that shows
   **live container contents with correct icons**: the two-instance problem (which actor holds
   fresh data and which one is drawable), record rules that keep the two apart, learning client
@@ -442,10 +459,7 @@ subscribe through the runtime ABI with `RuntimeListener<Event>`.
   reference block at `+0x8`, description-id virtual at `0x2f0`), the private-reference-block
   recipe for drawing items the drawable instance never held, the texture-atlas dead end, and
   container screen open/close detection including the cross-container destructor crash.
-- `references/version-checkpoints-and-change-notes.md` — **checkpoint discipline**: when to
-  ask the user for a backup (a fix confirmed, a feature accepted, before a risky rework), the
-  immutable backup layout, the change-note template that records what/why/evidence/known
-  issues/rollback, and how to prove a rollback by hash.
+
 - `references/signature-forensics.md` — finding a function and **proving it is
   usable**: what "usable" means (identity, uniqueness, ABI, lifetime, thread,
   re-entrancy, side effects), anchors for finding candidates, how to build a
@@ -470,23 +484,10 @@ subscribe through the runtime ABI with `RuntimeListener<Event>`.
   from `.eh_frame_hdr`, and the pitfalls (a call being unconditional does not
   mean the callee is unconditionally visible; re-derive conclusions per build).
   Read it before any "how does the engine do X" question on a big target.
-- `references/rea-and-disassembler-providers.md` — using an MCP disassembler
-  provider (REA) **precisely**: when it helps (pseudocode of one located
-  function) and when offline analysis is faster, the setup traps (provider
-  version too old for the supervisor API, MCP Python SDK 2.x renaming
-  `fastmcp`, missing `idalib` binding, hosts-blocked downloads), registration
-  shapes (stdio vs a long-lived supervisor URL), querying by address with a
-  warm database, and treating the output's `limitations` as unknown-not-absent.
-  Read it when a disassembler is available and you need pseudocode.
+
 - `references/build-deploy.md` — NDK+CMake build, xmake build, manifest,
   .levipack packaging, deployment, logcat verification.
-- `references/preloader-mod-implementation-notes.md` — field notes from a real
-  Android port, limited to traps the general references do not cover: runtime
-  image base for build-specific fallbacks (and the missing-FATAL symptom when it
-  is skipped), vtable-slot prototype verification, nearby-actor enumeration ABI,
-  overlay primitive/anchor specifics, locating the per-frame world renderer,
-  optional engine hooks and stale-cache cleanup, client-side scan budgeting, and
-  the crash-log nuance.
+
 - `references/levilauncher-native-mod-guide.md` — the **host side** distilled from
   the official LeviLaunchroid docs (`docs.levimc.org/LeviLaunchroid`): mod
   directory layout and the manifest fields that silently break a mod (`entry` must
@@ -638,6 +639,78 @@ subscribe through the runtime ABI with `RuntimeListener<Event>`.
   references, and debugging process. Read it whenever a GUI item icon is
   missing, stretched, submitted-but-invisible, updated after `setItem`, or
   affected by container open/close lifecycle.
+- `references/in-world-3d-rendering.md` — **how to draw your own 3D geometry in the game
+  world**: capture the frame's world-render entry, borrow the engine's materials by name, guard
+  matrix and shader-colour state with RAII, submit through the engine tessellator in
+  camera-relative coordinates, rasterize panels into bounded quad grids with tiny pattern tables
+  and greedy merging, draw text with the engine font (one matrix push per block, shadow as a
+  second pass), probe cells for occlusion instead of raycasting geometry, and keep a per-frame
+  budget. Ends with a performance checklist and a symptom → cause table. Read it before adding
+  any in-world geometry, label, icon or panel.
+
+- `references/build-locked-abi-profiles.md` — **one mod, one game build**: the build-id gate, the
+  `{name, address, pattern}` table generated with PC-relative immediates masked and a single-hit
+  assertion, the independent verifier that proves identity through relocations and typeinfo,
+  all-or-nothing installation, vtable identity checks, multi-build profiles, and the pitfalls of
+  hand-edited tables. Read it before hooking or calling anything inside the game image.
+- `references/in-place-render-interception.md` — **change the geometry the engine already draws**:
+  callsite-keyed interception by return address, emit-first/swallow-siblings, swapping one
+  argument object under object identity, structure-return assembly shims, relief geometry from
+  image data (luminance, normalisation, side faces), scope state, and the traps (drifting call
+  sites, GPU lifetime, swallowing vertices for the wrong caller).
+- `references/vanilla-screens-and-server-sessions.md` — **reusing vanilla screens**: the nearby-block
+  route through the engine's own use/interact verbs, reconstructing the open intent through the
+  engine's own dispatch, session-scoped validity handling, detached-actor identity substitution with
+  an ownership token, host-tick session liveness, solo detection, request queues, and pitfalls
+  (solo-only releases, per-tick allowances, missing host-side models).
+- `references/launcher-hud-data-driven-ui.md` — **HUD UI without engine hooks**: draw commands as
+  data (alignment sentinel, shadow as a second command, dedupe, rate cap, empty list clears), font
+  registration and validation, one settings table driving defaults/file/schema/clamp, the
+  tick/worker split with a try-lock tick, deferred world init, the localization key ladder, and
+  the lock/re-entrancy traps.
+- `references/native-mod-code-patterns.md` — **code-level patterns for a native mod**: the
+  testable project layout (one raw-memory unit, pure core, feature units), the lifecycle skeleton,
+  the address/pointer helper set (`base` / `at` / `fn` / `vfn` / `in_code`), a hook table with
+  all-or-nothing rollback, the detour shape (original first, gate after, nothing throws), RAII
+  guards for matrix / colour / current-object scope, vtable identity checks and the fail-open
+  shape, threading idioms (`try_to_lock` tick, worker condition variable, join before unhook), the
+  one-settings-table pattern, strict protocol parsing and UTF-16↔UTF-8 handling, the C++ habits
+  worth keeping, and the host tests that catch real mod bugs.
+- `references/mod-creative-thinking.md` — **the design thinking before the code**: where ideas come
+  from (friction, absence, recontext) and the one-sentence test; the ten-second demo; the route
+  ladder from settings up to an own renderer and why to take the lowest rung; reuse-before-build
+  and the worse-clone test; feasibility as a path question (data / action / render / persistence);
+  coexistence as a design choice; scope budgets; persistence identity and the invisible-failure
+  plan; the one-page design template; the iterate-in-visible-increments loop; presentation and
+  localization; anti-patterns. Read it before the first line of code.
+- `references/module-framework-and-shared-services.md` — **hosting many small features in one mod**:
+  the module base class (metadata, derived `enabled = master && keybind`, transition-only
+  enable/disable), the registry (owned modules, raw view, allocation-free id lookup, one registration
+  unit), the UI render-pass **subscription service** (one finish hook, a passive text hook capturing
+  the current font per thread, fixed callback array, re-entrancy guard), identity-bound delayed
+  actions, frame state, and named per-domain slot/offset headers.
+- `references/launcher-java-overlay-bridge.md` — **integrating with the host's overlay surface**:
+  resolve the host's classes through the app class loader and cache every method/field id (all
+  checked), a checked JNI wrapper with a private failure type and environment RAII, an embedded
+  `Runnable` task dex bound with `RegisterNatives` and posted through `runOnUiThread`, a
+  single-queue atomic post gate, host UI-mode checks (editor/menu/pause), position persistence, and
+  the drift/activity/ref pitfalls.
+- `references/session-timeline-capture.md` — **capturing a session as an ordered stream and
+  reconstructing it**: the versioned container (signature, varints, length-prefixed blobs,
+  bounds-checked decoder, size cap, patched context length, atomic writing), what the stream carries
+  (tick, context, chunks, packets, movement batches, environment deltas), reserved synthetic identity
+  and per-kind field filtering, the reconstruction phase machine over a private world, the
+  deterministic frame clock, validation rules and pitfalls.
+- `references/cinematic-camera-paths.md` — **camera tracks**: keyframe fields, per-segment
+  interpolation (linear/smooth/ease/hold/hermite/bezier), shortest-arc angle interpolation,
+  dimension boundaries, sampling as a pure function of tick, applying the camera at the narrowest
+  level once per frame, observing/restoring native FOV, editor camera vs preview, markers, and the
+  determinism rules for export.
+- `references/imgui-native-overlay.md` — **an immediate-mode editor inside the mod**: vendoring the
+  GUI and one GL backend, lazy context creation, one draw point per frame with full state restore,
+  density-derived fonts with a fallback, embedded assets, per-frame input capture, soft-keyboard
+  lifecycle, model/panels separation with a snapshot rate, surface recreation, and packaging
+  resources and fonts.
 
 ## Scripts
 

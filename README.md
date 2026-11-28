@@ -44,7 +44,7 @@ bedrock-pe-modding/
 │   └── workflows/ci.yml             # syntax + frontmatter + CLI smoke test
 └── skills/                          # the installable skill directory
     ├── SKILL.md                     # entry point: architecture, API table, workflow
-    ├── references/                  # 37 deep-dive notes, loaded on demand
+    ├── references/                  # 45 deep-dive notes, loaded on demand
     ├── scripts/                     # 25 offline tools
     └── assets/
         └── hud-button-templates/    # 14 PNG button templates (normal + pressed)
@@ -59,7 +59,7 @@ Two layers, deliberately separate:
   to that directory (`references/…`, `scripts/…`), so the folder works wherever
   it is installed — the copy just has to keep the name your agent expects.
 
-### `skills/references/` — 37 notes
+### `skills/references/` — 45 notes
 
 | File | Answers |
 |---|---|
@@ -74,9 +74,8 @@ Two layers, deliberately separate:
 | `porting-a-live-mod.md` | "How do I add a new game build to a mod that already ships?" |
 | `build-deploy.md` | "How do I build an arm64 `.so`, package it, and verify it via logcat?" |
 | `levilauncher-native-mod-guide.md` | "What does the host side contract look like?" (manifest, lifecycle, config, Mod Menu, input) |
-| `ida-workflow.md` | "How do I drive IDA by address (incl. IDA Pro MCP) without wasting an afternoon?" |
-| `embedding-dex-and-java-ui.md` | "How do I run compiled Java/Kotlin (real Android widgets, a Java SDK, `Canvas` drawing) from a native mod?" (javac→d8→`.rodata`, `InMemoryDexClassLoader`, Activity attach, drag, WebView state, `onDraw`) |
-| `rea-and-disassembler-providers.md` | "Which disassembler back-ends exist and how do I drive them?" |
+| `ida-workflow.md` | "How do I drive IDA by address (incl. IDA Pro MCP) without wasting an afternoon?" (now also covers REA-class disassembler providers, §9) |
+| `embedding-dex-and-java-ui.md` | "How do I run compiled Java/Kotlin (real Android widgets, a Java SDK, `Canvas` drawing) from a native mod?" (javac→d8→`.rodata`, `InMemoryDexClassLoader`, Activity attach, drag, WebView state, `onDraw`; §11 adds the class-shape + `RegisterNatives` variant and the page-initiated protocol) |
 | `render-pipeline-hooks.md` | "How do I add a visual effect on a closed-source renderer?" |
 | `weather-and-ambience-effects.md` | "How do I add fog, ambient particles and wind audio that compose with the engine instead of fighting it?" |
 | `shader-source-injection.md` | "How do I patch GLSL as text without breaking the link?" |
@@ -86,6 +85,18 @@ Two layers, deliberately separate:
 | `feature-rollback.md` | "How do I roll back, remove, or rename a shipped feature?" |
 | `verifying-unrun-cpp.md` | "How do I defend C++ I cannot compile or run here?" |
 | `lessons-learned.md` | distilled debugging experience across the above |
+| `in-world-3d-rendering.md` | "How do I draw my own panels, labels, icons or quad geometry in the 3D world?" |
+| `build-locked-abi-profiles.md` | "How do I ship one mod for one exact game build and refuse the others safely?" |
+| `in-place-render-interception.md` | "How do I change geometry the engine already draws instead of adding my own?" |
+| `vanilla-screens-and-server-sessions.md` | "How do I reuse a vanilla screen through the engine's own open path, and keep the change scoped?" |
+| `launcher-hud-data-driven-ui.md` | "How do I build labels/settings on the launcher HUD with no engine UI hook?" |
+| `native-mod-code-patterns.md` | "What does good native-mod code look like — layout, detours, guards, settings, tests?" |
+| `mod-creative-thinking.md` | "How do I decide what to build, how far to go, and what to cut before writing code?" |
+| `module-framework-and-shared-services.md` | "How do I host many small features in one mod without tangled hooks?" |
+| `launcher-java-overlay-bridge.md` | "How do I integrate with the host's overlay/menu surface?" |
+| `session-timeline-capture.md` | "How do I capture a session timeline and reconstruct it deterministically?" |
+| `cinematic-camera-paths.md` | "How do I build a camera track with keyframes and interpolation?" |
+| `imgui-native-overlay.md` | "How do I put a complex editor UI (timeline, panels) inside the game?" |
 
 ### `skills/scripts/` — 25 tools
 

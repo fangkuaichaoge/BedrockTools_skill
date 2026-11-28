@@ -104,3 +104,23 @@ Add a short, evidence-backed note to the project's technical notes: the
 symptom, the log line or measurement that identified the cause, and the
 conclusion ("this is not achievable at this layer"). Without it, the same dead
 end gets re-attempted a month later - including by you.
+
+## 9. Checkpoints and change notes
+
+Keep exactly **one working checkpoint per project** — the version the user confirmed — and nothing
+else. Iterate freely between checkpoints; intermediate builds live only in `dist/`.
+
+- Create one only after device confirmation (or a release package the user will ship), and not for
+  "maybe this fixes it" builds.
+- When a new version becomes the working one: create the new folder, verify it, delete the old one.
+  Do not keep two "working" checkpoints "just in case"; if a rollback target is needed for a
+  different build, say so in the folder name and note.
+- Layout: `<project> - backup-<version>-<short-tag>-<yyyyMMdd-HHmm>/` next to the project, with the
+  source tree, build files, docs, packaged artifact and (small) build directory. Never rename or
+  edit an existing checkpoint; create a corrected folder instead.
+- The note inside (`CHANGELOG.md`) records: time, version, target build, package name/size,
+  library size and hash; what changed and **why** (log lines, disassembly facts, crash addresses,
+  user reports); how it was verified (offline + device); known issues and rollback steps.
+- Verify before declaring it done: build output and packaged library byte-identical (hash), the
+  project's signature/offset checks pass, device confirmation recorded (or explicitly pending),
+  and the old folder deleted only after the new one verifies.

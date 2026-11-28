@@ -112,7 +112,7 @@ or patches, compile an arm64 `.so`, and verify it.
 | `skills/bedrock-pe-modding/references/signature-forensics.md` | finding a function and proving it is usable: anchors, pattern design, evidence ladder, ABI/thread/re-entrancy checks, ship checklist |
 | `skills/bedrock-pe-modding/references/so-analysis.md` | direct `.so` analysis (ELF/sections/symbols/strings/signatures) |
 | `skills/bedrock-pe-modding/references/build-deploy.md` | NDK+CMake build, manifest, .levipack, deploy |
-| `skills/bedrock-pe-modding/references/preloader-mod-implementation-notes.md` | field notes from a real port: runtime base for build-specific fallbacks, vtable-slot verification, actor enumeration ABI, overlay specifics, per-frame render entry discovery, optional hooks/cache cleanup, scan budgeting, crash-log nuance |
+
 | `skills/bedrock-pe-modding/references/levilauncher-native-mod-guide.md` | host-side contract distilled from the official LeviLaunchroid docs: mod layout and manifest fields (entry must equal the built `.so`, `overwrite_*` default to not replacing, `minecraft_versions` gating), lifecycle (`load()` required, both `load()` and `load(ModContext&)` accepted), `NativeMod` handle, pinned FetchContent SDK, typed config merge semantics, Mod Menu, the Input API's missing unregister, memory APIs, packaging, ship checklist, and docs-vs-headers drift |
 | `skills/bedrock-pe-modding/references/ida-workflow.md` | optional IDA / IDA Pro MCP guide |
 | `skills/bedrock-pe-modding/references/version-porting.md` | supporting several builds from one `.so`: signature portability (house style vs `--tight`), object-layout porting, per-build hit matrix, making the check unskippable |

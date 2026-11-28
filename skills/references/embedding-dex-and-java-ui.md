@@ -45,7 +45,7 @@ javac --release 8 -encoding UTF-8 -Xlint:-options \
 d8 --release --min-api 26 \
    --lib <SDK>/platforms/android-<API>/android.jar \
    --output build/dex $(find build/classes -name '*.class')
-# -> build/dex/classes.dex
+# -> build/dex/<module>.dex
 ```
 
 Notes that matter:
@@ -66,7 +66,7 @@ is enough; the point is that the committed tree contains only text:
 
 ```python
 # scripts/gen_payloads.py  (sketch)
-data = open("build/dex/classes.dex", "rb").read()
+data = open("build/dex/<module>.dex", "rb").read()
 assert data[:4] == b"dex\n", "not a dex file"
 
 def arr(name, blob, ctype):
@@ -103,8 +103,8 @@ must be inside the file.
 * Do not `mmap`/`fopen` a `.dex` you unpacked next to the mod — reinstall paths
   and scoped storage will lose it.
 * Do not try to `dlopen` a dex; it is not a native library.
-* Do not use `RegisterNatives` to expose the C++ side. Keep direction
-  **native → Java** (§7); a dex loaded this way does not need to call back.
+* `RegisterNatives` is optional: use it when the Java side must call back into C++ (the class-shape
+  variant in §11 does exactly that). Otherwise keep the direction **native → Java** (§7).
 
 ---
 
@@ -622,3 +622,35 @@ Before shipping:
 | CPU stays high with the panel closed | `View` frame loop not stopped when hidden |
 | second toggle does nothing | global ref/jmethodIDs dropped but `ensureReady` still thinks it is ready |
 | crash in `unload` | `DeleteGlobalRef` on a stale `jclass`, or a call after the loader went away |
+
+---
+
+## 11. Class-shape variant: a Java API with no Java logic
+
+The pipeline above compiles Java bodies. When the Java side only needs to *exist* — a JS bridge
+object, a `Runnable` to hop to the UI thread — a **class-shape dex** is smaller and safer:
+
+- one `public final class` extending Object, implementing the interface the host needs
+  (`Runnable`);
+- the bridge annotation on the **single method** JS may call, with runtime visibility, on the
+  method (not the class);
+- a constructor whose body is `super()` + `return` — two instructions, four code units;
+- every method `public native` with no code; the C++ side binds them with `RegisterNatives`.
+
+Loading is the same chain (direct buffer → in-memory loader → `loadClass` → global refs), plus:
+
+- a `RegisterNatives` table `{name, signature, function pointer}` per method; check the return
+  value, and log the mapping so a signature mismatch is visible;
+- the same instance is posted to the UI thread (`runOnUiThread(instance)`) **and** registered as
+  the JS interface (`addJavascriptInterface(instance, name)`) — one object serves both directions;
+- integrity gates: the dex header `file_size` equals the embedded length, checksum and signature
+  fields validate; refuse to load otherwise.
+
+The page protocol for this variant is **page-initiated**: the page calls the bridge for `current`
+state as its last load step, so there is no page-finished push and no ready race. Requests are
+newline-delimited tuples; replies are JSON. Bind the session to an epoch and the originating bridge
+instance, and refuse commands from a stale epoch or a different instance. Load the page with a
+non-null placeholder origin (a fake `https://…invalid/` URL) rather than a null/`about:blank` base.
+
+If the class loader or the page path fails, keep a **native fallback editor** so the feature degrades
+instead of disappearing.

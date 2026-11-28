@@ -199,3 +199,33 @@ is `sub_A664D78`, `v13`, `qword_13370428`. The decompiler gives *behaviour*;
 identity still comes from the string/RTTI/call-graph ladder in
 `signature-forensics.md` §10.
 
+---
+
+## 9. Disassembler providers (REA-class tools): setup and traps
+
+A supervising provider can run a disassembler for you and return an Evidence bundle. Use it for the
+**one function you have already located**; it does not replace offline location.
+
+- **Setup traps**: a bundled provider is often older than the supervisor API; the MCP Python SDK
+  major version may need pinning (`<2` when the provider imports the old `mcp.server.fastmcp`); a
+  headless engine needs its own Python binding; an offline/hosts-blocked machine cannot fetch
+  either.
+- **Register the provider once**, then query by **address**, not by a guessed name (a stripped
+  library has no names). Pipe the JSON envelope to a file; it is large.
+- **Read the `limitations` array**: empty facets mean *unknown*, not *absent* — an empty callers
+  list is not proof that nothing calls the function.
+- **Keep the supervisor warm**: repeat queries against the same binary reuse the open database
+  instead of re-analysing. Expect the first query to be slow; interrupting leaves a half-built
+  database.
+- **Prove the pipeline on a small binary first** (a few-KB `.so` exercises spawn, database,
+  decompiler and evidence assembly), then point it at the game library.
+- `doctor`/`capabilities` style checks prove the registration file, not the engine; only a real
+  query proves availability.
+- What the tool buys you: Hex-Rays pseudocode with control flow reconstructed (lazy singleton
+  initialisation, vtables, dispatch), callees/references/strings for that function, and an explicit
+  confidence/authority pair. Behaviour comes from the decompiler; **identity still comes from the
+  evidence ladder**.
+
+Checklist: registration healthy; SDK pinned; pipeline proven end-to-end on a small binary;
+addresses located offline first; supervisor kept alive; limitations read as unknown-not-absent.
+

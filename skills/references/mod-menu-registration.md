@@ -149,5 +149,5 @@ There is no per-button visibility API either: `ButtonInfo::defaultVisible` is ap
 registration, and `unregisterButton` removes it from the list without triggering a refresh.
 
 **Design rule:** if a feature needs a control that appears and disappears with game state, do not
-build it on HUD buttons. Draw the control yourself (see `preview-panels-and-container-ui.md`) or
+build it on HUD buttons. Draw the control yourself (see `container-preview-live-contents-and-icons.md` §13) or
 pick a gesture. Reserve HUD buttons for controls that exist for the whole session.
